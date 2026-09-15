@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rune Fall — Slimes of Midgard</title>
+<meta name="description" content="A match-3 puzzle game set in a Norse fantasy field of slimes. Swap neighbours, build runes, finish the quest before your moves run out.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<canvas id="leaves" aria-hidden="true"></canvas>
+
+<!-- shared gradient defs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <radialGradient id="g0" cx="34%" cy="28%"><stop offset="0" stop-color="#ff9c9c"/><stop offset="1" stop-color="#c92a2a"/></radialGradient>
+  <radialGradient id="g1" cx="34%" cy="28%"><stop offset="0" stop-color="#ffe89a"/><stop offset="1" stop-color="#e67700"/></radialGradient>
+  <radialGradient id="g2" cx="34%" cy="28%"><stop offset="0" stop-color="#c3f7cb"/><stop offset="1" stop-color="#2b8a3e"/></radialGradient>
+  <radialGradient id="g3" cx="34%" cy="28%"><stop offset="0" stop-color="#b3ddff"/><stop offset="1" stop-color="#1864ab"/></radialGradient>
+  <radialGradient id="g4" cx="34%" cy="28%"><stop offset="0" stop-color="#dccdff"/><stop offset="1" stop-color="#5f3dc4"/></radialGradient>
+  <radialGradient id="g5" cx="34%" cy="28%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#7d8590"/></radialGradient>
+</defs></svg>
+
+<main class="game">
+  <div class="panel">
+    <div class="crest">
+      <h1>Rune Fall</h1>
+      <p>Slimes of Midgard</p>
+    </div>
+
+    <div class="readout">
+      <div class="tablet"><div class="num gold" id="score">0</div><div class="lbl">Zeny</div></div>
+      <div class="tablet"><div class="num" id="moves">30</div><div class="lbl">Moves left</div></div>
+    </div>
+
+    <div class="tablet timer" id="timer">
+      <div class="timer-head"><span class="lbl">Time on the clock</span><span class="clock" id="clock">1:40</span></div>
+      <div class="track"><i id="timeBar"></i></div>
+    </div>
+
+    <div class="tablet lives">
+      <div class="hearts" id="hearts"></div>
+      <div class="regen" id="regen">Full</div>
+    </div>
+
+    <div class="tablet quest">
+      <h2 id="questTitle">Quest 1</h2>
+      <div id="goals"></div>
+    </div>
+
+    <button class="btn charge" id="chargeBtn" disabled>Rune charge <b>×0</b></button>
+
+    <div class="tools">
+      <button class="btn" id="hintBtn">Show a move</button>
+      <button class="btn" id="restartBtn">Give up</button>
+    </div>
+
+    <div class="tablet legend">
+      Match 3 slimes to pop them. Bigger matches leave runes behind.
+      <div><svg viewBox="0 0 100 100" id="lg1"></svg> Match 4 in a row — clears that row</div>
+      <div><svg viewBox="0 0 100 100" id="lg2"></svg> Match 5 in an L or T — blasts a 3×3</div>
+      <div><span class="orb" style="width:26px;height:26px;border-radius:50%;display:inline-block"></span> Match 5 in a line — swap it to erase a whole colour</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="frame">
+      <div class="board" id="board" role="grid" aria-label="Slime board"></div>
+      <div class="combo" id="combo"></div>
+      <button class="btn mute" id="muteBtn" title="Sound on or off" aria-label="Sound on or off">♪</button>
+      <div class="warp" id="warp" hidden aria-live="polite">
+        <div class="rings"><i></i><i></i><i></i></div>
+        <div class="warp-body" id="warpBody"></div>
+      </div>
+      <div class="veil" id="veil">
+        <h2 id="veilTitle">Rune Fall</h2>
+        <p id="veilText">The slimes of Midgard have overrun the field. Line up three or more before the moves or the clock run out. Losing a quest costs one of your five lives, and a life returns every 30 minutes.</p>
+        <div class="tally" id="veilTally" hidden></div>
+        <button class="btn gold" id="veilBtn">Begin</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+
+<!-- Uncomment and point at your own server to key lives to the visitor's IP
+     instead of this browser's storage. See server/lives-server.example.js
+<script>window.RUNE_LIVES_ENDPOINT = "http://localhost:8787";</script>
+-->
+<script src="js/lives.js"></script>
+<script src="js/game.js"></script>
+<script src="js/leaves.js"></script>
+</body>
+</html>

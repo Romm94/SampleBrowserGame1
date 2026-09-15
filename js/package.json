@@ -1,0 +1,14 @@
+{
+  "name": "rune-fall",
+  "version": "1.0.0",
+  "description": "A match-3 puzzle game set in a Norse fantasy field of slimes.",
+  "private": true,
+  "scripts": {
+    "test": "node test/smoke.js",
+    "serve": "python3 -m http.server 8000",
+    "lives-server": "node server/lives-server.example.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}
