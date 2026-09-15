@@ -40,6 +40,24 @@ asks you to collect a set number of specific slimes before **both** the move bud
 clock run out. The board reshuffles itself if no valid move is left. There's a hint button,
 and an idle nudge fires after eight seconds if you stall.
 
+## Objectives
+
+Quests ask for one of three things, and often a blocker goal alongside it:
+
+| Goal | What it wants | Appears |
+| --- | --- | --- |
+| Collect | A number of slimes of one to three colours | Most quests |
+| Score | A zeny total earned within the quest | Every 5th quest |
+| Blockers | Every frost and bramble cleared off the board | Quest 3 onward |
+
+**Frost** sits on a cell and chips away when you clear a match on top of it. **Bramble** locks
+its cell — you can't swap that slime until something clears it, so you have to work a match
+into it from around the outside. Both belong to the cell rather than the slime, so slimes fall
+through them normally and gravity is untouched.
+
+Goal sizes are derived from what a board can actually produce, not picked by hand — see
+[Balance](#balance).
+
 ## The stage clock
 
 Every quest is timed, and the clock is derived from the quest itself rather than set by hand:
@@ -61,6 +79,29 @@ progressively more as quests get harder.
 the same, as does pressing "Give up" — all three are failures and all three cost a life. If
 you'd rather only the timer cost a life, remove the `failStage` calls from `endOfTurn()` and
 the restart button in `js/game.js`.
+
+## Zeny, and buying your way out
+
+Zeny is a wallet, not a run score. It survives failing a quest, because otherwise you could
+never save enough to spend it.
+
+When you run out of moves or time, you're offered a continue before a life is taken:
+`+5 moves` or `+30 seconds` for zeny. The first costs 1,200, and each further continue in the
+same quest doubles. Decline it, or fail to afford it, and you lose a life instead and the
+quest restarts. Giving up deliberately always costs a life — no continue offered.
+
+Continues are the reason the score bonus matters. Clearing fast earns the zeny that buys you
+out of a bad board later.
+
+## Progress
+
+Your quest number, zeny and carried rune charges are saved as you play, so closing the tab
+mid-run loses nothing. Returning shows a "welcome back" screen with the option to continue or
+start over from quest 1.
+
+This is stored in `localStorage` via `js/progress.js`, deliberately separate from lives: lives
+are a rate limit a player has reason to cheat, so they belong on a server, while progress
+exists for the player's benefit and there's nothing to protect.
 
 ## Unused moves become rune charges
 
@@ -144,6 +185,38 @@ written at the top of the file:
    lives matter, an account login is the real answer; IP is the approximation.
 4. **The `/lives/restore` route refills on demand.** Delete it before deploying.
 
+## Balance
+
+`test/balance.js` plays quests with a bot that reads the board out of the DOM, aims at
+blockers, and never uses rune charges — one move deep, no cascade planning. It's deliberately
+worse than a competent person, so a goal the bot reaches is one a player reaches comfortably.
+
+```bash
+npm run balance          # quests 5, 10 and 15
+npm run balance 3 7 12   # specific quests
+node test/balance.js --blind 7   # the naive bot, for comparison
+```
+
+This harness caught a real bug. The original goal curve asked for 42 slimes of each of three
+colours by quest 7 — but with six colours only about one cleared tile in six matches a given
+goal, and a move clears roughly 4.5 tiles. The quest was asking for 126 tiles when the board
+could yield about 61. **Every quest past the second was mathematically unwinnable**, and no
+amount of playtesting the first two levels would have shown it.
+
+Goal sizes now come from that arithmetic: `moves × 0.75` per colour, scaled by a pressure
+factor. Difficulty rises through the colour count, the shrinking clock and the blockers rather
+than through a number the board can't produce.
+
+| Quest | Colours | Each | Total asked | Board can yield | Blockers |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 16 | 16 | 22 | — |
+| 5 | 3 | 16 | 48 | 63 | 2 |
+| 10 | 3 | 17 | 51 | 58 | 5 |
+| 20 | 3 | 15 | 45 | 47 | 8 |
+
+Score targets are derived the same way, at 220 zeny per move of budget against a measured bot
+average near 300.
+
 ## Testing
 
 `test/smoke.js` boots the real `index.html` in jsdom, clicks Begin, plays a turn via the
@@ -153,8 +226,15 @@ an exception killed the script above it.
 
 ```bash
 npm install     # jsdom, the only dev dependency
-npm test
+npm test        # smoke + features
 ```
+
+`test/features.js` covers the newer systems in separate browser instances: saved progress
+restoring, blockers placing and chipping, bramble cells refusing selection, score quests, the
+continue offer and its zeny charge, and the no-zeny path that spends a life instead. It speeds
+up `performance.now` to drain a stage clock in seconds so timeouts are testable.
+
+`test/bot.js` is shared by both harnesses.
 
 It serves the folder on a random port during the run, because jsdom refuses `localStorage`
 on `file://` origins. Exit code is non-zero if anything fails. Worth running before you
@@ -169,13 +249,17 @@ rune-fall/
 ├── css/
 │   └── styles.css          palette tokens, board, timer, warp, animations
 ├── js/
-│   ├── game.js             board, matching, quests, timer, warp, charges
+│   ├── game.js             board, matching, quests, timer, warp, charges, blockers
 │   ├── lives.js            5 lives, 30-minute regen, local or server-backed
+│   ├── progress.js         quest number, zeny and charges across sessions
 │   └── leaves.js           falling-leaf background, independent of the game
 ├── server/
 │   └── lives-server.example.js    optional IP-keyed lives, plain Node
 ├── test/
-│   └── smoke.js            headless boot-and-play check
+│   ├── smoke.js            headless boot-and-play check
+│   ├── features.js         progress, blockers, score quests, continues
+│   ├── balance.js          bot playthroughs for tuning goal sizes
+│   └── bot.js              shared board reader and move chooser
 ├── assets/
 │   ├── favicon.svg         slime mascot, browser tab icon
 │   └── sprite-sheet.svg    reference art for docs and previews
@@ -200,18 +284,15 @@ file, and fetching one would break when you open the page with `file://`.
 **Board size** — `ROWS` and `COLS` in `js/game.js`. The CSS is driven by a `--cell` variable
 that `fit()` recalculates, so an odd board like 7×9 works without touching the stylesheet.
 
-**Difficulty curve** — `questFor(n)` returns colours, goal counts and the move budget;
-`timeFor(q, n)` derives the clock from that. The goal size is deliberately capped at 42 per
-colour: past that point the quest asks for more tiles than the move budget can physically
-clear, and the stage becomes unwinnable rather than hard. Current shape:
+**Difficulty curve** — `questFor(n)` returns the colours, goal sizes, blocker plan and move
+budget; `timeFor(q, n)` derives the clock from all of it. Change anything here and re-run
+`npm run balance` — the numbers are tied to measured clearing rates, not intuition.
 
-| Quest | Tiles to collect | Moves | Clock |
-| --- | --- | --- | --- |
-| 1 | 18 | 30 | 1:20 |
-| 5 | 114 | 28 | 4:05 |
-| 10 | 126 | 26 | 4:00 |
-| 20 | 126 | 21 | 3:25 |
-| 30 | 126 | 18 | 3:25 |
+**Continues** — `CONTINUE_BASE`, `CONTINUE_MOVES` and `CONTINUE_SECONDS` at the top of
+`js/game.js`. The cost doubles per continue within a quest.
+
+**Blockers** — the `plan` object in `questFor()`. `frostHp` above 1 makes frost take several
+matches; balance runs showed 2 made the blocker goal the only thing that mattered, so it's 1.
 
 **Lives and regeneration** — `MAX` and `REGEN_MS` at the top of `js/lives.js`, mirrored in
 `server/lives-server.example.js`. Change both or they'll disagree.
@@ -253,6 +334,7 @@ mode exists precisely because regeneration has to run somewhere the player can't
 
 ## Ideas not built yet
 
+- Colourblind support: the six slimes differ only by hue, which is a real accessibility gap
 - Accounts, so lives follow the player instead of the browser or the connection
 - Obstacle tiles (stone blocks, frozen slimes) so later quests differ in kind, not just number
 - A quest map screen instead of a straight run of numbered levels

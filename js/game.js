@@ -8,6 +8,9 @@
   const MAX_CHARGES      = 5;    // ceiling on charges held at once
   const TIME_FLOOR       = 80;   // seconds, shortest a stage can be
   const TIME_CEIL        = 300;  // seconds, longest a stage can be
+  const CONTINUE_BASE    = 1200; // zeny for the first continue in a quest
+  const CONTINUE_MOVES   = 5;    // what a "more moves" continue buys
+  const CONTINUE_SECONDS = 30;   // what a "more time" continue buys
   /* ---------------------------------------------------------------------- */
 
   const TYPES = [
@@ -20,8 +23,10 @@
   ];
 
   const Lives = window.RuneLives;
+  const Progress = window.RuneProgress;
 
   const boardEl  = document.getElementById("board");
+  const blockEl  = document.getElementById("blockers");
   const scoreEl  = document.getElementById("score");
   const movesEl  = document.getElementById("moves");
   const goalsEl  = document.getElementById("goals");
@@ -40,13 +45,19 @@
   const veilText = document.getElementById("veilText");
   const veilTally= document.getElementById("veilTally");
   const veilBtn  = document.getElementById("veilBtn");
+  const veilAlt  = document.getElementById("veilAlt");
 
   let board = [];
+  let blockers = [];                 // blockers[r][c] = {kind, hp} | null — belongs to the cell, not the slime
+  const blockEls = new Map();        // "r,c" -> element
   const tiles = new Map();
   let nextId = 1;
   let busy = true, started = false, locked = false;
   let score = 0, movesLeft = 0, level = 1;
   let goals = [];
+  let questKind = "collect", scoreTarget = 0, scoreAtStart = 0, blockerTotal = 0;
+  let continues = 0;
+  let stagePlan = { frost: 0, bramble: 0 };
   let charges = 0, armed = false;
   let selected = null, hintTimer = null;
 
@@ -133,12 +144,31 @@
 
   /* ---------------- sizing ---------------- */
   function fit(){
-    const avail = Math.min(window.innerWidth - 60, window.innerHeight - 260, 480);
-    const cell = Math.max(34, Math.floor(avail / COLS));
+    // visualViewport reflects the area actually on screen once the mobile
+    // address bar and on-screen keyboard are accounted for; innerHeight doesn't
+    const vv = window.visualViewport;
+    const vw = Math.round((vv && vv.width)  || window.innerWidth);
+    const vh = Math.round((vv && vv.height) || window.innerHeight);
+    const narrow = vw < 820;
+    // a phone on its side has the HUD beside the board, not above it, so the
+    // board gets the height instead of sharing it
+    const sideBySide = narrow && vh < 560 && vw > vh;
+
+    // gutter covers the body padding (16 each side) plus the board frame (7 each
+    // side) — leaving it out overflows sideways on a 320px phone
+    const widthCap  = vw - (narrow ? 52 : 60);
+    const heightCap = sideBySide ? vh - 56
+                    : narrow     ? vh * 0.48      // shares the screen with the HUD
+                    :              vh - 260;
+
+    const cell = Math.max(30, Math.floor(Math.min(widthCap, heightCap, 480) / COLS));
     document.documentElement.style.setProperty("--cell", cell + "px");
     syncPositions(false);
+    syncBlockers();
   }
   window.addEventListener("resize", fit);
+  window.addEventListener("orientationchange", () => setTimeout(fit, 120));
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", fit);
   const cellPx = () => {
     const el = document.documentElement;
     const v = getComputedStyle(el).getPropertyValue("--cell") || el.style.getPropertyValue("--cell");
@@ -177,6 +207,114 @@
   }
   function destroy(t){ t.el.remove(); tiles.delete(t.id); }
 
+  /* ---------------- blockers ----------------
+     Blockers belong to the cell, not to the slime sitting on it. Slimes fall
+     through them normally, which keeps gravity untouched — the alternative,
+     blockers that occupy a cell, needs column-segment refill logic and can
+     strand a pocket of board with no way for new slimes to reach it. */
+  function blockerMarkup(b){
+    if (b.kind === "frost"){
+      const cracked = b.hp <= 1
+        ? `<path d="M22 28 L48 52 L32 74 M72 24 L56 50 L80 70" stroke="rgba(235,250,255,.95)"
+                 stroke-width="4" fill="none" stroke-linecap="round"/>` : "";
+      return `<svg viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="3" y="3" width="94" height="94" rx="11"
+              fill="rgba(150,215,255,.34)" stroke="rgba(205,242,255,.8)" stroke-width="3"/>
+        <path d="M14 20 L34 8" stroke="rgba(255,255,255,.5)" stroke-width="5" stroke-linecap="round"/>
+        ${cracked}</svg>`;
+    }
+    return `<svg viewBox="0 0 100 100" aria-hidden="true">
+      <g fill="none" stroke="#4a5f2a" stroke-width="7" stroke-linecap="round">
+        <path d="M6 22 C6 12 12 6 22 6"/><path d="M78 6 C88 6 94 12 94 22"/>
+        <path d="M94 78 C94 88 88 94 78 94"/><path d="M22 94 C12 94 6 88 6 78"/>
+      </g>
+      <g fill="#6b8a3c">
+        <circle cx="10" cy="40" r="5"/><circle cx="90" cy="60" r="5"/>
+        <circle cx="40" cy="10" r="5"/><circle cx="60" cy="90" r="5"/>
+      </g></svg>`;
+  }
+
+  function resetBlockers(){
+    blockEl.innerHTML = "";
+    blockEls.clear();
+    blockers = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    blockerTotal = 0;
+  }
+
+  function drawBlocker(r, c){
+    const k = K(r,c);
+    const b = blockers[r][c];
+    const existing = blockEls.get(k);
+    if (!b){
+      if (existing){
+        existing.classList.add("shatter");
+        setTimeout(() => existing.remove(), 360);
+        blockEls.delete(k);
+      }
+      return;
+    }
+    const el = existing || (() => {
+      const d = document.createElement("div");
+      d.className = "blocker";
+      blockEl.appendChild(d);
+      blockEls.set(k, d);
+      return d;
+    })();
+    el.dataset.kind = b.kind;
+    el.innerHTML = blockerMarkup(b);
+    const s = cellPx();
+    el.style.transform = `translate3d(${c * s}px, ${r * s}px, 0)`;
+  }
+
+  function syncBlockers(){
+    const s = cellPx();
+    blockEls.forEach((el, k) => {
+      const [r,c] = parse(k);
+      el.style.transform = `translate3d(${c * s}px, ${r * s}px, 0)`;
+    });
+  }
+
+  const blockersLeft = () => blockers.flat().filter(Boolean).length;
+  const isLocked = (r,c) => !!(blockers[r] && blockers[r][c] && blockers[r][c].kind === "bramble");
+
+  // a cleared cell chips whatever is under it
+  function chipBlocker(r, c){
+    const b = blockers[r] && blockers[r][c];
+    if (!b) return false;
+    b.hp--;
+    if (b.hp <= 0) blockers[r][c] = null;
+    drawBlocker(r,c);
+    blip(b.hp <= 0 ? 620 : 380, .1, "square", .13);
+    return true;
+  }
+
+  function placeBlockers(plan){
+    resetBlockers();
+    const cells = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) cells.push([r,c]);
+
+    const put = (kind, hp, n) => {
+      for (let i = 0; i < n && cells.length; i++){
+        const idx = rnd(cells.length);
+        const [r,c] = cells.splice(idx,1)[0];
+        blockers[r][c] = { kind, hp };
+        blockerTotal++;
+        drawBlocker(r,c);
+      }
+    };
+    put("frost", plan.frostHp || 1, plan.frost || 0);
+    put("bramble", 1, plan.bramble || 0);
+
+    // brambles freeze their cell, so make sure a legal move still exists
+    let guard = 0;
+    while (!findMove() && guard++ < 40){
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+        if (isLocked(r,c)){ blockers[r][c] = null; blockerTotal--; drawBlocker(r,c); break; }
+      }
+      if (!blockers.flat().some(b => b && b.kind === "bramble")) break;
+    }
+  }
+
   /* ---------------- board setup ---------------- */
   function buildBoard(entrance){
     tiles.forEach(t => t.el.remove());
@@ -190,7 +328,9 @@
       board[r][c] = makeTile(ty).id;
     }
     syncPositions(false);
+    resetBlockers();
     if (!findMove()) return buildBoard(entrance);
+    placeBlockers(stagePlan);
     if (entrance){
       for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
         const t = T(board[r][c]);
@@ -358,8 +498,7 @@
       if (!clear.size && !spawns.length) break;
 
       const gained = clear.size * 60 * combo;
-      score += gained;
-      scoreEl.textContent = score.toLocaleString();
+      addScore(gained);
       blip(420 + combo * 90, .1, "triangle");
       if (combo > 1){
         comboEl.textContent = "Combo ×" + combo;
@@ -371,15 +510,18 @@
         floatPts(first[0], first[1], "+" + gained);
       }
 
+      let chipped = 0;
       for (const k of clear){
         const [r,c] = parse(k);
+        if (chipBlocker(r,c)) chipped++;
         const id = board[r][c]; if (!id) continue;
         const t = T(id);
-        const goal = goals.find(g => g.type === t.type);
+        const goal = goals.find(g => g.kind === "collect" && g.type === t.type);
         if (goal && goal.have < goal.need) goal.have++;
         t.el.classList.add("pop");
       }
-      drawGoals();
+      if (chipped) addScore(chipped * 40);
+      refreshGoals();
 
       await sleep(250);
       for (const k of clear){
@@ -410,10 +552,14 @@
     const swap = (a,b) => { const t = board[a[0]][a[1]]; board[a[0]][a[1]] = board[b[0]][b[1]]; board[b[0]][b[1]] = t; };
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
       const id = board[r][c];
-      if (id && T(id).special === "rainbow") return [K(r,c), K(r, c < COLS-1 ? c+1 : c-1)];
+      if (isLocked(r,c)) continue;
+      if (id && T(id).special === "rainbow"){
+        const nc = c < COLS-1 ? c+1 : c-1;
+        if (!isLocked(r,nc)) return [K(r,c), K(r,nc)];
+      }
       for (const [dr,dc] of [[0,1],[1,0]]){
         const r2 = r + dr, c2 = c + dc;
-        if (!inBounds(r2,c2)) continue;
+        if (!inBounds(r2,c2) || isLocked(r2,c2)) continue;
         swap([r,c],[r2,c2]);
         const ok = findRuns().length > 0;
         swap([r,c],[r2,c2]);
@@ -437,38 +583,106 @@
   }
 
   /* ---------------- quests ---------------- */
+  /* Quest shapes by number:
+       1–2    collect one colour on a clean board
+       3+     frost appears — two chips each, clear it by matching on top of it
+       5,10…  a score quest replaces the collect goal
+       6+     bramble appears — locks its cell until something clears it        */
   function questFor(n){
     const pool = [...TYPES.keys()];
     for (let i = pool.length - 1; i > 0; i--){ const j = (n * 7 + i * 13) % (i + 1); [pool[i],pool[j]] = [pool[j],pool[i]]; }
-    const count = Math.min(3, 1 + Math.floor((n - 1) / 2));
-    // capped: past this, the goal outgrows what the move budget can physically clear
-    const need = Math.min(42, 18 + (n - 1) * 5);
-    const q = {
-      moves: Math.max(18, 30 - Math.floor((n - 1) / 2)),
-      goals: pool.slice(0, count).map(t => ({ type:t, need, have:0 }))
+
+    /* Counts are set from test/balance.js runs: a bot that always takes the
+       first legal move should come close to clearing them, so a person who
+       actually aims at the blockers clears them with room to spare. */
+    const plan = {
+      frost:   n >= 3 ? Math.min(5, 2 + Math.floor((n - 3) / 3)) : 0,
+      frostHp: 1,
+      bramble: n >= 6 ? Math.min(3, 1 + Math.floor((n - 6) / 5)) : 0
     };
+    const blockerCount = plan.frost + plan.bramble;
+    const isScoreQuest = n >= 5 && n % 5 === 0;
+    const moves = Math.max(18, 30 - Math.floor((n - 1) / 2));
+
+    const goals = [];
+    if (isScoreQuest){
+      goals.push({ kind:"score", need: scoreTargetFor(moves), have: 0 });
+    } else {
+      const count = Math.min(3, 1 + Math.floor((n - 1) / 2));
+      /* With six colours, only about one cleared tile in six matches any given
+         goal, and a move clears ~4.5 tiles. So one colour yields roughly
+         moves × 0.75 over a whole quest — asking for more than that is asking
+         for something the board cannot produce. Difficulty comes from the
+         colour count, the shrinking clock and the blockers, not from a number
+         that outgrows the board. See test/balance.js. */
+      const pressure = Math.min(0.95, 0.72 + (n - 1) * 0.015);
+      const need = Math.max(12, Math.round(moves * 0.75 * pressure));
+      pool.slice(0, count).forEach(t => goals.push({ kind:"collect", type:t, need, have:0 }));
+    }
+    if (blockerCount) goals.push({ kind:"blockers", need: blockerCount, have: 0 });
+
+    const q = { kind: isScoreQuest ? "score" : "collect", moves, plan, goals };
     q.seconds = timeFor(q, n);
     return q;
   }
 
-  // more slimes to collect means more time, but every quest tightens the belt a little
+  /* Derived from the move budget rather than the quest number: test/balance.js
+     shows a bot that aims at objectives but plans no cascades averages roughly
+     300 zeny a move, so 220 leaves headroom for an unlucky board. */
+  function scoreTargetFor(moves){
+    return Math.round(moves * 220 / 100) * 100;
+  }
+
+  // more to do means more time, but every quest tightens the belt a little
   function timeFor(q, n){
-    const need = q.goals.reduce((s,g) => s + g.need, 0);
-    const base = 45 + need * 1.9;
+    const collect = q.goals.filter(g => g.kind === "collect").reduce((s,g) => s + g.need, 0);
+    const chips   = q.plan.frost * q.plan.frostHp + q.plan.bramble;
+    const points  = q.goals.filter(g => g.kind === "score").reduce((s,g) => s + g.need, 0);
+    const work = collect + chips * 3 + points / 150;
+    const base = 45 + work * 1.9;
     const squeeze = Math.max(0.72, 1 - (n - 1) * 0.018);
     const raw = Math.min(TIME_CEIL, Math.max(TIME_FLOOR, base * squeeze));
     return Math.round(raw / 5) * 5;
   }
 
+  const GOAL_ICON = {
+    blockers: `<svg viewBox="0 0 100 100" aria-hidden="true">
+      <rect x="8" y="8" width="84" height="84" rx="13" fill="rgba(150,215,255,.34)"
+            stroke="rgba(205,242,255,.85)" stroke-width="5"/>
+      <path d="M28 34 L54 58 L38 78" stroke="rgba(235,250,255,.95)" stroke-width="6"
+            fill="none" stroke-linecap="round"/></svg>`,
+    score: `<svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="36" fill="url(#g1)" stroke="#6b3400" stroke-width="4"/>
+      <path d="M50 27 L58 44 L77 46 L63 59 L67 78 L50 68 L33 78 L37 59 L23 46 L42 44 Z"
+            fill="rgba(255,255,255,.6)"/></svg>`
+  };
+
   function goalRow(g, plain){
     const done = !plain && g.have >= g.need;
+    const icon = g.kind === "collect" ? slimeMarkup(g.type, null) : GOAL_ICON[g.kind];
+    const num = v => g.kind === "score" ? v.toLocaleString() : v;
+    const label = plain ? num(g.need) : num(Math.min(g.have, g.need)) + "/" + num(g.need);
     return `<div class="goal${done ? " done" : ""}">
-      ${slimeMarkup(g.type, null)}
+      ${icon}
       <div class="bar"><i style="width:${plain ? 0 : Math.min(100, g.have / g.need * 100)}%"></i></div>
-      <b>${plain ? g.need : Math.min(g.have, g.need) + "/" + g.need}</b>
+      <b>${label}</b>
     </div>`;
   }
+
+  // blockers and score are read off the board rather than tallied as they happen
+  function refreshGoals(){
+    for (const g of goals){
+      if (g.kind === "blockers") g.have = g.need - blockersLeft();
+      if (g.kind === "score")    g.have = Math.max(0, score - scoreAtStart);
+    }
+    drawGoals();
+  }
   function drawGoals(){ goalsEl.innerHTML = goals.map(g => goalRow(g)).join(""); }
+
+  function addScore(n){
+    score = Math.max(0, score + n);
+    scoreEl.textContent = score.toLocaleString();
+  }
 
   /* ---------------- timer ---------------- */
   function renderTimer(){
@@ -522,6 +736,7 @@
   function placeCharge(k){
     const t = tileAt(k);
     if (!t || t.special === "rainbow") return;
+    if (isLocked(t.r, t.c)){ blip(150, .1, "sawtooth", .07); return; }
     charges--;
     t.special = "bomb";
     t.el.innerHTML = tileMarkup(t);
@@ -600,25 +815,37 @@
     level = n;
     const q = questFor(n);
     goals = q.goals;
+    questKind = q.kind;
+    stagePlan = q.plan;
     movesLeft = q.moves;
+    scoreAtStart = score;          // score goals measure this quest, not the wallet
+    continues = 0;
     questEl.textContent = "Quest " + n;
     movesEl.textContent = movesLeft;
     movesEl.classList.remove("low");
-    drawGoals();
     renderCharges();
     buildBoard(entrance);
+    refreshGoals();
     fit();
     selected = null;
     disarm();
     startTimer(q.seconds);
     busy = false;
+    saveProgress();
     scheduleHint();
   }
+
+  function saveProgress(){
+    try { Progress.save({ level, zeny: score, charges }); } catch (e){}
+  }
+  window.addEventListener("pagehide", saveProgress);
+  window.addEventListener("beforeunload", saveProgress);
 
   function restartQuest(){
     clearHint();
     veil.hidden = true;
     veilBtn.hidden = false;
+    veilAlt.hidden = true;
     startLevel(level, false);
   }
 
@@ -649,8 +876,7 @@
     charges = Math.min(MAX_CHARGES, charges + earned);
     const kept = charges - before;
 
-    score += timeBonus;
-    scoreEl.textContent = score.toLocaleString();
+    addScore(timeBonus);
     blip(660, .12, "sine", .2); setTimeout(() => blip(880, .2, "sine", .2), 130);
 
     const summary = `
@@ -667,39 +893,108 @@
       <p class="kicker">Warping to</p>
       <h3>Quest ${level + 1}</h3>
       <div class="warp-goals">${next.goals.map(g => goalRow(g, true)).join("")}</div>
-      <p class="warp-meta">${next.moves} moves · ${clock(next.seconds)} on the clock${charges ? ` · ${charges} rune charge${charges === 1 ? "" : "s"} carried` : ""}</p>`;
+      <p class="warp-meta">${next.moves} moves · ${clock(next.seconds)} on the clock${
+        next.plan.frost + next.plan.bramble ? ` · ${next.plan.frost + next.plan.bramble} blockers` : ""}${
+        charges ? ` · ${charges} rune charge${charges === 1 ? "" : "s"} carried` : ""}</p>`;
 
     await warp(summary, quest);
     startLevel(level + 1, true);
   }
 
-  async function failStage(title, text){
+  const continueCost = () => CONTINUE_BASE * Math.pow(2, continues);
+
+  const FAIL_COPY = {
+    time:  ["The hourglass ran out", "Quest " + "%L" + " beat the clock."],
+    moves: ["Out of moves", "The slimes held the field."],
+    quit:  ["Quest abandoned", "Walking away costs a life, same as losing."]
+  };
+
+  /* Failure funnels through here. If the player can afford a continue they get
+     the choice first; a life is only spent once they decline or can't pay. */
+  function stageFailed(reason){
+    if (locked) return;
     busy = true;
     pauseTimer();
     clearHint();
     disarm();
     markSelected(null);
+
+    if (reason !== "quit" && score >= continueCost()) return offerContinue(reason);
+    return loseLife(reason);
+  }
+
+  function offerContinue(reason){
+    const cost = continueCost();
+    const buys = reason === "time"
+      ? "+" + CONTINUE_SECONDS + " seconds"
+      : "+" + CONTINUE_MOVES + " moves";
+    const [title] = FAIL_COPY[reason];
+    veilTitle.textContent = title;
+    veilText.textContent = "You can spend zeny to stay in quest " + level + ", or give up and lose a life.";
+    veilTally.hidden = false;
+    veilTally.innerHTML = `Zeny <b>${score.toLocaleString()}</b>`;
+    veilBtn.hidden = false;
+    veilBtn.className = "btn gold";
+    veilBtn.textContent = `${buys} for ${cost.toLocaleString()} zeny`;
+    veilBtn.onclick = () => buyContinue(reason);
+    veilAlt.hidden = false;
+    veilAlt.textContent = "Give up (costs a life)";
+    veilAlt.onclick = () => loseLife("quit");
+    veil.hidden = false;
+    blip(520, .12, "sine", .14);
+  }
+
+  function buyContinue(reason){
+    const cost = continueCost();
+    if (score < cost) return;
+    addScore(-cost);
+    continues++;                    // each continue in the same quest costs double
+    veil.hidden = true;
+    veilAlt.hidden = true;
+    if (reason === "time"){
+      timeLeft += CONTINUE_SECONDS;
+      timeTotal += CONTINUE_SECONDS;
+      renderTimer();
+    } else {
+      movesLeft += CONTINUE_MOVES;
+      movesEl.textContent = movesLeft;
+      movesEl.classList.remove("low");
+    }
+    refreshGoals();
+    saveProgress();
+    busy = false;
+    resumeTimer();
+    scheduleHint();
+    blip(900, .22, "sine", .2);
+  }
+
+  async function loseLife(reason){
+    busy = true;
+    pauseTimer();
     charges = 0;
     renderCharges();
 
     const snap = await Lives.spend();
+    saveProgress();
     if (snap.lives <= 0){ showLockout(); return; }
 
+    const [title, body] = FAIL_COPY[reason] || FAIL_COPY.quit;
     veilTitle.textContent = title;
-    veilText.textContent = text;
+    veilText.textContent = body.replace("%L", level) + " The quest restarts from the top — your zeny is safe.";
     veilTally.hidden = false;
     veilTally.innerHTML = `Zeny <b>${score.toLocaleString()}</b> · ${snap.lives} ${snap.lives === 1 ? "life" : "lives"} left`;
+    veilAlt.hidden = true;
     veilBtn.hidden = false;
+    veilBtn.className = "btn gold";
     veilBtn.textContent = "Try again";
-    veilBtn.onclick = () => { score = 0; scoreEl.textContent = "0"; restartQuest(); };
+    veilBtn.onclick = () => restartQuest();
     veil.hidden = false;
   }
 
   function onTimeout(){
     if (busy || locked) return;
     blip(200, .4, "sawtooth", .12);
-    failStage("The hourglass ran out",
-      "Quest " + level + " beat the clock. That costs one life — the quest restarts from the top.");
+    stageFailed("time");
   }
 
   function showVeil(title, text, tally, btn){
@@ -730,6 +1025,8 @@
 
   async function trySwap(a,b){
     if (busy || !started || locked) return;
+    const [ar,ac] = parse(a), [br,bc] = parse(b);
+    if (isLocked(ar,ac) || isLocked(br,bc)){ blip(150, .12, "sawtooth", .08); return; }
     busy = true; clearHint();
     markSelected(null);
     blip(300, .06, "square", .1);
@@ -756,17 +1053,19 @@
       expandSpecials(clear);
       spendMove();
       const gained = clear.size * 80;
-      score += gained; scoreEl.textContent = score.toLocaleString();
+      addScore(gained);
       floatPts(rainbow.r, rainbow.c, "+" + gained);
       blip(1100, .3, "sine", .22);
       for (const k of clear){
-        const [r,c] = parse(k); const id = board[r][c]; if (!id) continue;
+        const [r,c] = parse(k);
+        chipBlocker(r,c);
+        const id = board[r][c]; if (!id) continue;
         const t = T(id);
-        const goal = goals.find(g => g.type === t.type);
+        const goal = goals.find(g => g.kind === "collect" && g.type === t.type);
         if (goal && goal.have < goal.need) goal.have++;
         t.el.classList.add("pop");
       }
-      drawGoals();
+      refreshGoals();
       await sleep(260);
       for (const k of clear){
         const [r,c] = parse(k); const id = board[r][c]; if (!id) continue;
@@ -800,10 +1099,7 @@
 
   function endOfTurn(){
     if (questDone()) return completeQuest();
-    if (movesLeft <= 0){
-      return failStage("Out of moves",
-        "The slimes held the field. That costs one life — the quest restarts from the top.");
-    }
+    if (movesLeft <= 0) return stageFailed("moves");
     busy = false;
     scheduleHint();
   }
@@ -814,6 +1110,7 @@
     if (busy || !started || locked) return;
     const el = e.target.closest(".tile"); if (!el) return;
     const t = T(Number(el.dataset.id)); if (!t) return;
+    if (isLocked(t.r, t.c) && !armed){ blip(150, .1, "sawtooth", .07); return; }
     drag = { from: K(t.r, t.c), x: e.clientX, y: e.clientY, moved: false };
     if (boardEl.setPointerCapture) { try { boardEl.setPointerCapture(e.pointerId); } catch (err){} }
   });
@@ -854,33 +1151,64 @@
   }
   function scheduleHint(){ clearHint(); hintTimer = setTimeout(showHint, 8000); }
   document.getElementById("hintBtn").onclick = () => { if (!busy && started && !locked) showHint(); };
-  document.getElementById("restartBtn").onclick = async () => {
+  document.getElementById("restartBtn").onclick = () => {
     if (!started || locked || busy) return;
-    await failStage("Quest abandoned",
-      "Walking away from a quest costs one life, same as losing it.");
+    stageFailed("quit");
   };
 
   /* ---------------- boot ---------------- */
   (async () => {
+    const saved = Progress.load();
+    const resuming = saved.level > 1 || saved.zeny > 0;
+    level = saved.level;
+    score = saved.zeny;
+    charges = Math.min(MAX_CHARGES, saved.charges);
+    scoreAtStart = score;
+
+    const preview = questFor(level);
+    stagePlan = preview.plan;
+    goals = preview.goals;
+
     fit();              // sets --cell; harmless now that syncPositions tolerates an empty board
     buildBoard(false);
     fit();              // re-run so the freshly built tiles get placed
-    const preview = questFor(1);
-    goals = preview.goals;
-    drawGoals();
+    questEl.textContent = "Quest " + level;
     movesEl.textContent = preview.moves;
     timeTotal = preview.seconds; timeLeft = preview.seconds;
     renderTimer();
     renderCharges();
+    addScore(0);        // paints the wallet
+    refreshGoals();
 
     const snap = await Lives.init();
 
-    veilBtn.onclick = () => {
+    const begin = () => {
       if (Lives.get().lives <= 0){ showLockout(); return; }
       veil.hidden = true;
+      veilAlt.hidden = true;
       started = true;
-      startLevel(1, false);
+      startLevel(level, false);
     };
+
+    if (resuming){
+      veilTitle.textContent = "Welcome back";
+      veilText.textContent = "You left off on quest " + level + ". Your zeny is where you left it.";
+      veilTally.hidden = false;
+      veilTally.innerHTML = `Zeny <b>${score.toLocaleString()}</b>`;
+      veilBtn.textContent = "Continue quest " + level;
+      veilAlt.hidden = false;
+      veilAlt.textContent = "Start over from quest 1";
+      veilAlt.onclick = () => {
+        Progress.clear();
+        level = 1; score = 0; charges = 0; scoreAtStart = 0;
+        addScore(0);
+        renderCharges();
+        begin();
+      };
+    } else {
+      veilBtn.textContent = "Begin";
+    }
+    veilBtn.onclick = begin;
 
     if (snap.lives <= 0){ started = true; showLockout(); }
   })();

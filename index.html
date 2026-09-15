@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rune Fall — Slimes of Midgard</title>
 <meta name="description" content="A match-3 puzzle game set in a Norse fantasy field of slimes. Swap neighbours, build runes, finish the quest before your moves run out.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -69,7 +69,7 @@
 
   <div class="stage">
     <div class="frame">
-      <div class="board" id="board" role="grid" aria-label="Slime board"></div>
+      <div class="board" id="board" role="grid" aria-label="Slime board"><div class="blockers" id="blockers"></div></div>
       <div class="combo" id="combo"></div>
       <button class="btn mute" id="muteBtn" title="Sound on or off" aria-label="Sound on or off">♪</button>
       <div class="warp" id="warp" hidden aria-live="polite">
@@ -81,6 +81,7 @@
         <p id="veilText">The slimes of Midgard have overrun the field. Line up three or more before the moves or the clock run out. Losing a quest costs one of your five lives, and a life returns every 30 minutes.</p>
         <div class="tally" id="veilTally" hidden></div>
         <button class="btn gold" id="veilBtn">Begin</button>
+        <button class="btn" id="veilAlt" hidden></button>
       </div>
     </div>
   </div>
@@ -92,6 +93,7 @@
 <script>window.RUNE_LIVES_ENDPOINT = "http://localhost:8787";</script>
 -->
 <script src="js/lives.js"></script>
+<script src="js/progress.js"></script>
 <script src="js/game.js"></script>
 <script src="js/leaves.js"></script>
 </body>

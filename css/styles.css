@@ -12,16 +12,29 @@
   --gap:2px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%}
+html{margin:0; height:100%}
 body{
+  margin:0;
+  min-height:100%;
+  min-height:100dvh;          /* survives the mobile address bar sliding away */
   background:
     radial-gradient(1200px 700px at 50% -10%, #2d2356 0%, transparent 60%),
     radial-gradient(700px 500px at 85% 110%, #1b2f4a 0%, transparent 65%),
     var(--night);
+  background-attachment:fixed;
   color:var(--parch);
   font-family:"Baloo 2", system-ui, sans-serif;
-  display:flex; align-items:center; justify-content:center;
-  padding:16px; overflow-x:hidden;
+  display:flex; justify-content:center;
+  /* centre only when it fits; otherwise the overflow would go off the top of
+     the page where no amount of scrolling can reach it. The plain value first
+     so browsers without `safe` keep the old behaviour instead of stretching. */
+  align-items:center;
+  align-items:safe center;
+  padding:16px;
+  padding-left:max(16px, env(safe-area-inset-left));
+  padding-right:max(16px, env(safe-area-inset-right));
+  padding-bottom:max(16px, env(safe-area-inset-bottom));
+  overflow-x:hidden;
 }
 /* leaves drift over the starfield and under everything else */
 #leaves{position:fixed; inset:0; z-index:0; display:block; pointer-events:none}
@@ -168,10 +181,88 @@ body::before{
 .veil .tally b{color:var(--gold); font-size:22px}
 
 .mute{position:absolute; right:12px; top:12px; width:34px; height:34px; padding:0; flex:none; font-size:15px}
+/* ===================================================================
+   Portrait phones
+   .panel becomes display:contents so its children are grid items of
+   .game and can be ordered individually — otherwise the whole HUD moves
+   as one block and ends up below the board, off screen during play.
+   =================================================================== */
 @media(max-width:819px){
-  .panel{order:2}
-  .crest{order:0}
+  body{align-items:flex-start; padding-top:12px}
+
+  .game{
+    grid-template-columns:2fr 1fr;
+    gap:9px;
+    align-items:start;
+    max-width:560px;
+  }
+  .panel{display:contents}
+
+  .crest    {grid-column:1 / -1; order:0; text-align:center}
+  .readout  {grid-column:1 / -1; order:1}
+  .timer    {grid-column:1;      order:2}
+  .lives    {grid-column:2;      order:3}
+  .stage    {grid-column:1 / -1; order:4}
+  .quest    {grid-column:1 / -1; order:5}
+  .charge   {grid-column:1 / -1; order:6}
+  .tools    {grid-column:1 / -1; order:7}
+  .legend   {display:none}      /* reference text, not needed mid-quest */
+
+  .crest h1{font-size:23px; margin-bottom:1px}
+  .crest p{font-size:12px}
+
+  .tablet{padding:9px 11px}
+  .readout .num{font-size:21px}
+  .readout .lbl{font-size:11px}
+
+  .timer .clock{font-size:18px}
+  .timer .timer-head{margin-bottom:6px}
+
+  .lives{flex-direction:column; align-items:flex-start; gap:5px}
+  .hearts{gap:3px}
+  .hearts svg{width:17px; height:17px}
+  .regen{font-size:11px}
+
+  .quest h2{font-size:14px; margin-bottom:7px}
+  .goal{margin-bottom:6px; gap:8px}
+  .goal svg{width:27px; height:27px}
+  .goal b{font-size:13px; min-width:40px}
+
+  .frame{padding:7px; border-radius:14px}
+
+  /* overlays live inside the board frame, which is small here */
+  .veil{padding:15px; overflow-y:auto}
+  .veil h2{font-size:19px}
+  .veil p{font-size:13px; max-width:none}
+  .veil .tally{font-size:13px}
+  .veil .tally b{font-size:18px}
+  .veil .btn{min-width:0; width:100%; padding:10px 14px; font-size:14.5px}
+  .warp{padding:12px}
+  .warp-body{max-width:none}
+  .warp-body h3{font-size:20px; margin:2px 0 10px}
+  .warp-body .kicker{font-size:12.5px}
+  .ledger{font-size:12.5px; gap:5px}
+  .warp-goals{gap:6px; margin-bottom:9px}
+  .warp-meta{font-size:12px}
+  .combo{font-size:20px}
+}
+
+/* Landscape phones have width to spare and no height, so the stacked portrait
+   layout above is wrong for them — put the HUD back beside the board. */
+@media(max-width:819px) and (orientation:landscape) and (max-height:560px){
+  body{align-items:flex-start; padding-top:8px}
+
+  .game{grid-template-columns:196px auto; gap:10px; max-width:none; align-items:start}
+  .panel{display:grid; gap:7px; order:0}
   .stage{order:1}
+  .crest, .legend{display:none}
+
+  /* undo the portrait grid placement — these are children of .panel again */
+  .readout, .timer, .lives, .quest, .charge, .tools{grid-column:auto; order:0}
+  .lives{flex-direction:row; align-items:center; justify-content:space-between}
+  .quest h2{margin-bottom:5px}
+  .goal{margin-bottom:5px}
+  .goal svg{width:24px; height:24px}
 }
 @media(prefers-reduced-motion:reduce){
   *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.09s !important}
@@ -274,3 +365,33 @@ body::before{
 /* the veil hides its button during the lives lockout */
 .veil .btn[hidden]{display:none}
 .veil .tally b{font-variant-numeric:tabular-nums}
+
+/* ===================================================================
+   Blockers — frost chips away, bramble locks its cell
+   =================================================================== */
+.blockers{position:absolute; inset:0; z-index:2; pointer-events:none}
+.blocker{
+  position:absolute; left:0; top:0;
+  width:var(--cell); height:var(--cell);
+  display:flex; align-items:center; justify-content:center;
+  animation:blockerIn .3s ease-out backwards;
+}
+.blocker svg{width:100%; height:100%; display:block}
+.blocker[data-kind="frost"]{filter:drop-shadow(0 0 7px rgba(140,210,255,.45))}
+.blocker[data-kind="bramble"]{filter:drop-shadow(0 0 6px rgba(70,100,35,.7))}
+@keyframes blockerIn{from{opacity:0; transform:scale(.6)}}
+.blocker.shatter{animation:shatter .34s ease-in forwards}
+@keyframes shatter{
+  40%{transform:scale(1.2); opacity:.9}
+  100%{transform:scale(.3) rotate(24deg); opacity:0}
+}
+
+/* ===================================================================
+   Overlay actions
+   =================================================================== */
+.veil .btn{flex:none; padding:12px 26px; font-size:16px; min-width:230px}
+.veil #veilAlt{font-size:14px; padding:9px 20px; opacity:.85}
+.veil #veilAlt[hidden]{display:none}
+
+/* goal rows for the non-collect objectives reuse the slime row layout */
+.goal svg{border-radius:7px}
