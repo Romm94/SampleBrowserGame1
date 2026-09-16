@@ -11,6 +11,7 @@
   const CONTINUE_BASE    = 1200; // zeny for the first continue in a quest
   const CONTINUE_MOVES   = 5;    // what a "more moves" continue buys
   const CONTINUE_SECONDS = 30;   // what a "more time" continue buys
+  const CREEPER_CAP      = 14;   // the vine never takes more of the board than this
   /* ---------------------------------------------------------------------- */
 
   /* key matches the cell name in assets/sprites.png; spark is the colour used
@@ -66,6 +67,7 @@
   let stagePlan = { frost: 0, bramble: 0 };
   let charges = 0, armed = false, chargeRune = "bomb";
   let seenTips = [];
+  let musicOff = false;
   let selected = null, hintTimer = null;
 
   // timer
@@ -143,12 +145,29 @@
     } catch (e){}
   }
 
-  document.getElementById("muteBtn").onclick = e => {
-    muted = !muted;
-    if (window.RuneMusic) RuneMusic.setMuted(muted);
-    e.currentTarget.textContent = muted ? "✕" : "♪";
-    e.currentTarget.style.opacity = muted ? .5 : 1;
+  const sfxBtn = document.getElementById("sfxBtn");
+  const bgmBtn = document.getElementById("bgmBtn");
+
+  function dressToggle(btn, off, onIcon, offIcon){
+    btn.textContent = off ? offIcon : onIcon;
+    btn.classList.toggle("is-off", off);
+    btn.setAttribute("aria-pressed", String(!off));
+  }
+
+  sfxBtn.onclick = () => {
+    muted = !muted;                       // effects only
+    dressToggle(sfxBtn, muted, "🔊", "🔇");
+    if (!muted) blip(680, .08, "sine", .12);
+    saveSettings();
   };
+
+  bgmBtn.onclick = () => {
+    musicOff = !musicOff;
+    if (window.RuneMusic) RuneMusic.setMuted(musicOff);
+    dressToggle(bgmBtn, musicOff, "♪", "♪");
+    saveSettings();
+  };
+
   if (window.RuneMusic) RuneMusic.init();
 
   /* ---------------- sizing ---------------- */
@@ -230,26 +249,11 @@
      through them normally, which keeps gravity untouched — the alternative,
      blockers that occupy a cell, needs column-segment refill logic and can
      strand a pocket of board with no way for new slimes to reach it. */
+  const BLOCKER_ART = { frost:"frozen", bramble:"bramble", creeper:"creeper" };
+
   function blockerMarkup(b){
-    if (b.kind === "frost"){
-      const cracked = b.hp <= 1
-        ? `<path d="M22 28 L48 52 L32 74 M72 24 L56 50 L80 70" stroke="rgba(235,250,255,.95)"
-                 stroke-width="4" fill="none" stroke-linecap="round"/>` : "";
-      return `<svg viewBox="0 0 100 100" aria-hidden="true">
-        <rect x="3" y="3" width="94" height="94" rx="11"
-              fill="rgba(150,215,255,.34)" stroke="rgba(205,242,255,.8)" stroke-width="3"/>
-        <path d="M14 20 L34 8" stroke="rgba(255,255,255,.5)" stroke-width="5" stroke-linecap="round"/>
-        ${cracked}</svg>`;
-    }
-    return `<svg viewBox="0 0 100 100" aria-hidden="true">
-      <g fill="none" stroke="#4a5f2a" stroke-width="7" stroke-linecap="round">
-        <path d="M6 22 C6 12 12 6 22 6"/><path d="M78 6 C88 6 94 12 94 22"/>
-        <path d="M94 78 C94 88 88 94 78 94"/><path d="M22 94 C12 94 6 88 6 78"/>
-      </g>
-      <g fill="#6b8a3c">
-        <circle cx="10" cy="40" r="5"/><circle cx="90" cy="60" r="5"/>
-        <circle cx="40" cy="10" r="5"/><circle cx="60" cy="90" r="5"/>
-      </g></svg>`;
+    const chipped = b.hp < (b.max || b.hp) ? " is-chipped" : "";
+    return `<i class="art art-${BLOCKER_ART[b.kind]}${chipped}"></i>`;
   }
 
   function resetBlockers(){
@@ -292,8 +296,14 @@
     });
   }
 
-  const blockersLeft = () => blockers.flat().filter(Boolean).length;
-  const isLocked = (r,c) => !!(blockers[r] && blockers[r][c] && blockers[r][c].kind === "bramble");
+  // creeper is left out: it spreads, so counting it would make the goal move
+  const blockersLeft = () =>
+    blockers.flat().filter(b => b && b.kind !== "creeper").length;
+  const creepersLeft = () => blockers.flat().filter(b => b && b.kind === "creeper").length;
+  const isLocked = (r,c) => {
+    const b = blockers[r] && blockers[r][c];
+    return !!b && (b.kind === "bramble" || b.kind === "creeper");
+  };
 
   // a cleared cell chips whatever is under it
   function chipBlocker(r, c){
@@ -303,7 +313,62 @@
     if (b.hp <= 0) blockers[r][c] = null;
     drawBlocker(r,c);
     blip(b.hp <= 0 ? 620 : 380, .1, "square", .13);
-    return true;
+    if (b.kind === "creeper") creeperCleared();
+    return b.kind !== "creeper";
+  }
+
+  /* ---------------- creeper vine ----------------
+     An old vine that takes the board back while you're not looking. It spreads
+     to a neighbouring cell on a timer, and the timer only resets when you cut
+     some of it — so ignoring it costs you the board, and clearing the last of
+     it ends the threat for the rest of the quest. */
+  let creeperTimer = null, creeperEvery = 0;
+
+  function creeperCleared(){
+    // cutting any of it buys time; cutting all of it ends the threat
+    clearTimeout(creeperTimer);
+    creeperTimer = null;
+    if (creepersLeft() > 0) armCreeper();
+    else if (creeperEvery) announce("Vine cut back", 900);
+  }
+
+  function armCreeper(){
+    clearTimeout(creeperTimer);
+    if (!creeperEvery || !started || locked) return;
+    creeperTimer = setTimeout(growCreeper, creeperEvery);
+  }
+
+  function growCreeper(){
+    creeperTimer = null;
+    if (busy || locked || !started || !veil.hidden){ armCreeper(); return; }
+    if (!creepersLeft()) return;                      // beaten for this quest
+    if (creepersLeft() >= CREEPER_CAP){ armCreeper(); return; }
+
+    // grow into a free cell beside existing vine
+    const spots = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+      if (!blockers[r][c] || blockers[r][c].kind !== "creeper") continue;
+      for (const [dr,dc] of [[0,1],[0,-1],[1,0],[-1,0]]){
+        const nr = r+dr, nc = c+dc;
+        if (inBounds(nr,nc) && !blockers[nr][nc]) spots.push([nr,nc]);
+      }
+    }
+    if (!spots.length){ armCreeper(); return; }
+
+    const [r,c] = spots[rnd(spots.length)];
+    blockers[r][c] = { kind:"creeper", hp:1, max:1 };
+    drawBlocker(r,c);
+    sparks(r, c, 8, "#7fc96f");
+    blip(220, .22, "sawtooth", .1);
+
+    // never let it strangle the board completely
+    let guard = 0;
+    while (!findMove() && guard++ < 30){
+      blockers[r][c] = null;
+      drawBlocker(r,c);
+      break;
+    }
+    armCreeper();
   }
 
   function placeBlockers(plan){
@@ -315,21 +380,30 @@
       for (let i = 0; i < n && cells.length; i++){
         const idx = rnd(cells.length);
         const [r,c] = cells.splice(idx,1)[0];
-        blockers[r][c] = { kind, hp };
+        blockers[r][c] = { kind, hp, max: hp };
         blockerTotal++;
         drawBlocker(r,c);
       }
     };
     put("frost", plan.frostHp || 1, plan.frost || 0);
     put("bramble", 1, plan.bramble || 0);
+    put("creeper", 1, plan.creeper || 0);
 
-    // brambles freeze their cell, so make sure a legal move still exists
+    creeperEvery = plan.creeperEvery || 0;
+    armCreeper();
+
+    // bramble and creeper freeze their cells, so make sure a legal move survives
     let guard = 0;
     while (!findMove() && guard++ < 40){
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
-        if (isLocked(r,c)){ blockers[r][c] = null; blockerTotal--; drawBlocker(r,c); break; }
+      let freed = false;
+      for (let r = 0; r < ROWS && !freed; r++) for (let c = 0; c < COLS && !freed; c++){
+        if (!isLocked(r,c)) continue;
+        if (blockers[r][c].kind !== "creeper") blockerTotal--;
+        blockers[r][c] = null;
+        drawBlocker(r,c);
+        freed = true;
       }
-      if (!blockers.flat().some(b => b && b.kind === "bramble")) break;
+      if (!freed) break;                  // nothing left to remove
     }
   }
 
@@ -692,9 +766,13 @@
     const plan = {
       frost:   n >= 3 ? Math.min(5, 2 + Math.floor((n - 3) / 3)) : 0,
       frostHp: 1,
-      bramble: n >= 6 ? Math.min(3, 1 + Math.floor((n - 6) / 5)) : 0
+      bramble: n >= 6 ? Math.min(3, 1 + Math.floor((n - 6) / 5)) : 0,
+      // the creeper arrives later and quickens with the quest number: it starts
+      // as a single shoot every 16s and tightens toward three shoots every 7s
+      creeper:      n >= 9 ? Math.min(3, 1 + Math.floor((n - 9) / 6)) : 0,
+      creeperEvery: n >= 9 ? Math.max(7000, 16000 - (n - 9) * 500) : 0
     };
-    const blockerCount = plan.frost + plan.bramble;
+    const blockerCount = plan.frost + plan.bramble;   // creeper is not an objective
     const isScoreQuest = n >= 5 && n % 5 === 0;
     const moves = Math.max(18, 30 - Math.floor((n - 1) / 2));
 
@@ -730,7 +808,7 @@
   // more to do means more time, but every quest tightens the belt a little
   function timeFor(q, n){
     const collect = q.goals.filter(g => g.kind === "collect").reduce((s,g) => s + g.need, 0);
-    const chips   = q.plan.frost * q.plan.frostHp + q.plan.bramble;
+    const chips   = q.plan.frost * q.plan.frostHp + q.plan.bramble + q.plan.creeper * 2;
     const points  = q.goals.filter(g => g.kind === "score").reduce((s,g) => s + g.need, 0);
     const work = collect + chips * 3 + points / 150;
     const base = 45 + work * 1.9;
@@ -918,7 +996,14 @@
   }
 
   /* ---------------- stage flow ---------------- */
+  function stopCreeper(){
+    clearTimeout(creeperTimer);
+    creeperTimer = null;
+    creeperEvery = 0;
+  }
+
   function startLevel(n, entrance){
+    stopCreeper();
     level = n;
     const q = questFor(n);
     goals = q.goals;
@@ -946,14 +1031,19 @@
       tip("basics");
       if (q.plan.frost)   tip("frost");
       if (q.plan.bramble) tip("bramble");
+      if (q.plan.creeper) tip("creeper");
       if (q.kind === "score") tip("score");
       if (charges > 0)    tip("charge");
     }, 700);
   }
 
   function saveProgress(){
-    try { Progress.save({ level, zeny: score, charges, seen: seenTips }); } catch (e){}
+    try {
+      Progress.save({ level, zeny: score, charges, seen: seenTips,
+                      sfxOff: muted, bgmOff: musicOff });
+    } catch (e){}
   }
+  const saveSettings = saveProgress;
   window.addEventListener("pagehide", saveProgress);
   window.addEventListener("beforeunload", saveProgress);
 
@@ -977,6 +1067,7 @@
     busy = true;
     hideTip();
     pauseTimer();
+    stopCreeper();
     clearHint();
     disarm();
     markSelected(null);
@@ -1088,6 +1179,7 @@
   async function loseLife(reason){
     busy = true;
     pauseTimer();
+    stopCreeper();
     charges = 0;
     renderCharges();
 
@@ -1151,6 +1243,7 @@
     combine: ["Two runes, one blast", "Swap two runes into each other and they combine into something much bigger."],
     frost:   ["Frost", "The pale tiles are frost. Clear a match on top of one to chip it away."],
     bramble: ["Bramble", "A bramble tile can't be swapped. Work a match into it from around the side."],
+    creeper: ["The vine is growing", "It spreads to a new tile every few seconds and locks whatever it covers. Cut it back by matching on it — clear it all and it stops for good."],
     score:   ["A different quest", "This one wants zeny, not colours. Big cascades and rune combinations pay best."],
     charge:  ["Carried runes", "Spare moves became rune charges. Pick a rune below, then tap any slime to place it."]
   };
@@ -1173,10 +1266,12 @@
     hideTip();
     helpEl.hidden = false;
     pauseTimer();                       // reading the rules shouldn't cost time
+    clearTimeout(creeperTimer);         // nor board
+    creeperTimer = null;
   }
   function closeHelp(){
     helpEl.hidden = true;
-    if (started && !locked && !busy && veil.hidden) resumeTimer();
+    if (started && !locked && !busy && veil.hidden){ resumeTimer(); armCreeper(); }
   }
   document.getElementById("helpBtn").onclick = () => helpEl.hidden ? openHelp() : closeHelp();
   document.getElementById("helpClose").onclick = closeHelp;
@@ -1438,6 +1533,11 @@
     score = saved.zeny;
     charges = Math.min(MAX_CHARGES, saved.charges);
     seenTips = saved.seen || [];
+    muted = !!saved.sfxOff;
+    musicOff = !!saved.bgmOff;
+    dressToggle(sfxBtn, muted, "🔊", "🔇");
+    dressToggle(bgmBtn, musicOff, "♪", "♪");
+    if (window.RuneMusic && musicOff) RuneMusic.setMuted(true);
     scoreAtStart = score;
 
     const preview = questFor(level);

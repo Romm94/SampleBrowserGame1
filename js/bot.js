@@ -67,16 +67,19 @@ function matchesOn(grid){
   return hit;
 }
 
+// kinds that freeze their cell — the game rejects a swap involving one
+const LOCKED = new Set(["bramble", "creeper"]);
+
 /* prefers the swap that chips the most blockers; ties go to the bigger match */
 function chooseMove(doc, cell){
   const { grid, blockers } = readBoard(doc, cell);
   let best = null;
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
-    if (!grid[r][c] || blockers[r][c] === "bramble") continue;
+    if (!grid[r][c] || LOCKED.has(blockers[r][c])) continue;
     for (const [dr,dc] of [[0,1],[1,0]]){
       const r2 = r + dr, c2 = c + dc;
       if (r2 >= ROWS || c2 >= COLS) continue;
-      if (!grid[r2][c2] || blockers[r2][c2] === "bramble") continue;
+      if (!grid[r2][c2] || LOCKED.has(blockers[r2][c2])) continue;
 
       let t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
       const hit = matchesOn(grid);

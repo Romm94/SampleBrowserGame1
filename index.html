@@ -55,7 +55,8 @@
       <button class="btn" id="hintBtn">Show a move</button>
       <button class="btn" id="restartBtn">Give up</button>
       <button class="btn mute" id="helpBtn" title="How to play" aria-label="How to play">?</button>
-      <button class="btn mute" id="muteBtn" title="Sound or music on or off" aria-label="Sound or music on or off">♪</button>
+      <button class="btn mute" id="sfxBtn" title="Sound effects on or off" aria-label="Sound effects on or off">🔊</button>
+      <button class="btn mute" id="bgmBtn" title="Music on or off" aria-label="Music on or off">♪</button>
     </div>
 
     <div class="tablet legend">
@@ -73,8 +74,6 @@
   <div class="stage">
     <div class="frame">
       <div class="board" id="board" role="grid" aria-label="Slime board"><div class="blockers" id="blockers"></div></div>
-      <div class="vine vine-l" aria-hidden="true"></div>
-      <div class="vine vine-r" aria-hidden="true"></div>
       <div class="combo" id="combo"></div>
       <div class="tip" id="tip" hidden aria-live="polite"></div>
 
@@ -108,6 +107,9 @@
           <dl class="help-list">
             <div><dt>Frost</dt><dd>Chips away when you clear a match on top of it</dd></div>
             <div><dt>Bramble</dt><dd>Locks its tile — work a match into it from around the side</dd></div>
+            <div><dt>Creeper vine</dt><dd>Locks its tile and spreads to another every few seconds.
+            Cutting any of it resets the clock; cutting all of it stops the spread for the rest of
+            the quest. It doesn't count toward the blocker goal — it's just in your way</dd></div>
           </dl>
 
           <h3>Zeny and lives</h3>

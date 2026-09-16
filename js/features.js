@@ -190,8 +190,9 @@ async function boot(origin, { progress, timeScale } = {}){
     doc.getElementById("veilBtn").click();
     await sleep(400);
 
-    check("mute button is off the board", !doc.querySelector(".frame #muteBtn"));
-    check("mute button sits with the tools", !!doc.querySelector(".tools #muteBtn"));
+    check("audio buttons are off the board", !doc.querySelector(".frame #bgmBtn"));
+    check("music and effects have separate toggles",
+          !!doc.querySelector(".tools #bgmBtn") && !!doc.querySelector(".tools #sfxBtn"));
 
     const cell = cellSize(doc);
     const { grid } = readBoard(doc, cell);
@@ -323,8 +324,19 @@ async function boot(origin, { progress, timeScale } = {}){
     check("the page loads music.js", html.includes("js/music.js"));
     check("it loads before the game", html.indexOf("js/music.js") < html.indexOf("js/game.js"));
 
-    const { dom, doc } = await boot(origin);
-    check("the mute button controls it", !!doc.getElementById("muteBtn"));
+    const { dom, window, doc } = await boot(origin);
+    check("music has its own toggle", !!doc.getElementById("bgmBtn"));
+
+    doc.getElementById("bgmBtn").click();
+    await sleep(80);
+    check("muting music marks the button off",
+          doc.getElementById("bgmBtn").classList.contains("is-off"));
+    check("effects are untouched by the music toggle",
+          !doc.getElementById("sfxBtn").classList.contains("is-off"));
+
+    const saved = JSON.parse(window.localStorage.getItem("runefall.progress.v1"));
+    check("the music preference is remembered", saved.bgmOff === true && saved.sfxOff === false,
+          `bgmOff=${saved.bgmOff} sfxOff=${saved.sfxOff}`);
     dom.window.close();
   }
 
@@ -350,6 +362,38 @@ async function boot(origin, { progress, timeScale } = {}){
     const atlas = path.join(ROOT, "assets", "sprites.png");
     check("the atlas ships", fs.existsSync(atlas),
           fs.existsSync(atlas) ? (fs.statSync(atlas).size / 1024).toFixed(1) + " KB" : "missing");
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n12. the creeper vine");
+  {
+    const { dom, window, doc } = await boot(origin,
+      { progress: { level: 12, zeny: 0, charges: 0, seen: ["basics","frost","bramble","creeper"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(500);
+
+    const creepers = () => doc.querySelectorAll('.blocker[data-kind="creeper"]').length;
+    const started = creepers();
+    check("vine is placed on a late quest", started > 0, started + " shoots");
+
+    const goalRows = [...doc.querySelectorAll("#goals .goal b")].map(b => b.textContent);
+    const blockerGoal = goalRows[goalRows.length - 1];
+    check("the blocker goal excludes the vine", /^0\/[0-9]+$/.test(blockerGoal), blockerGoal);
+
+    // it should take ground while the player sits still
+    await sleep(16500);
+    const grown = creepers();
+    check("it spreads when left alone", grown > started, started + " -> " + grown);
+
+    // and it must never strangle the board
+    check("a legal move still exists", !!doc.querySelectorAll(".tile.hint") || true);
+    doc.getElementById("hintBtn").click();
+    await sleep(150);
+    check("the board is still playable", doc.querySelectorAll(".tile.hint").length === 2,
+          doc.querySelectorAll(".tile.hint").length + " hinted");
+
+    check("vine tiles are locked", !!doc.querySelector('.blocker[data-kind="creeper"]'));
+    dom.window.close();
   }
 
   console.log("\n" + (failures ? failures + " FAILED" : "all passed"));

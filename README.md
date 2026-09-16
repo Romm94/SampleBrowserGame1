@@ -70,8 +70,21 @@ Quests ask for one of three things, and often a blocker goal alongside it:
 
 **Frost** sits on a cell and chips away when you clear a match on top of it. **Bramble** locks
 its cell — you can't swap that slime until something clears it, so you have to work a match
-into it from around the outside. Both belong to the cell rather than the slime, so slimes fall
-through them normally and gravity is untouched.
+into it from around the outside. All blockers belong to the cell rather than the slime, so
+slimes fall through them normally and gravity is untouched.
+
+**The creeper vine** is different: it's pressure, not an objective. From quest 9 it starts as a
+single shoot and spreads to a neighbouring cell on a timer, locking whatever it covers. Cutting
+any of it resets the timer; cutting all of it stops the spread for the rest of the quest, so
+it rewards dealing with it early. It is deliberately excluded from the blocker goal — counting
+something that grows would make the target move while you chase it. It also can never take the
+last legal move: a shoot that would strangle the board is withdrawn, and it stops at 14 cells.
+
+| Quest | Shoots at start | Spreads every |
+| --- | --- | --- |
+| 9 | 1 | 16 s |
+| 15 | 2 | 13 s |
+| 25 | 3 | 8 s |
 
 Goal sizes are derived from what a board can actually produce, not picked by hand — see
 [Balance](#balance).
@@ -127,6 +140,9 @@ out of a bad board later.
 Every sound effect is generated at runtime with the Web Audio API. Combinations get their own
 sounds: a two-note chord for a cross, a rising arpeggio for a rune storm, filtered noise for
 the big blasts.
+
+Music and effects have separate toggles in the tools row, and both preferences are saved with
+your progress.
 
 Background music plays from `assets/bgm.mp3`. `js/music.js` waits for both the track to load
 and the first tap before playing, since browsers block audio until the user interacts, and it
@@ -371,15 +387,21 @@ rune-fall/
 └── .gitignore
 ```
 
-Tile art comes from `assets/sprites.png`, a single 640×256 atlas of ten 128px cells — six
-slimes on the top row, four runes on the bottom. One file means one request and one decode.
+Tile art comes from `assets/sprites.png`, a single 640×512 atlas of sixteen 128px cells: six
+slimes, four full-colour rune sprites, three blockers (frozen, bramble, creeper) and three
+white rune marks for the board. One file means one request and one decode.
 The `.art-*` rules in the stylesheet map each name to its `background-position`; `TYPES` in
 `js/game.js` holds the key and the debris colour for each slime.
 
-Runes on the board are **not** the rune sprites. A rune has to keep its slime's colour, or you
-couldn't tell what it matches, so the row, column and blast marks are drawn as a glowing
-overlay on top of the slime. The rune sprites are used where colour doesn't matter: the
-legend, the rune picker and the help overlay.
+Runes on the board are **not** the full rune sprites. A rune has to keep its slime's colour, or
+you couldn't tell what it matches, so the board uses the white rune marks — `mrow`, `mcol`,
+`mbomb` — laid over the slime at 76% of the cell with a glow, and the slime underneath is
+dimmed slightly so both stay readable. At full bleed the mark crowded the slime and neither
+read well. The full-colour rune sprites are used where colour doesn't matter: the legend, the
+rune picker and the help overlay.
+
+The board's own surface carries an old brown tree vine, drawn as an inline SVG behind the
+slimes at half opacity so it reads as part of the board rather than as something in the way.
 
 Each tile publishes `data-type` and `data-special`, which is how the test bot reads the board
 without reaching into the game's closure.
@@ -390,11 +412,13 @@ without reaching into the game's closure.
 ember, amber, moss, frost, wraith, bone, row, col, bomb, orb. `TYPES` in `js/game.js` maps each
 slime to its atlas key and its spark colour; the `.art-*` rules set the positions.
 
-**Vines** — the `.vine` rules in the stylesheet. The vine is an inline SVG data URI tiled
-vertically with `background-repeat:repeat-y`, so it fits any board height without stretching.
-It sits half outside the frame in the side gutter; if you widen it, widen `.frame`'s horizontal
-padding to match and update the gutter constants in `fit()`, or the board will overflow
-sideways on small phones.
+**Board vine** — the `.board::before` rule. It's an inline SVG data URI stretched to the board,
+so redrawing it means editing that one path set.
+
+**The creeper** — `creeper` and `creeperEvery` in `questFor()`'s plan, `CREEPER_CAP` at the top
+of `js/game.js`. Growth logic is `growCreeper()`. Change any of it and re-run
+`npm run balance 12 20`; a spreading obstacle is the easiest way to make a quest quietly
+unwinnable.
 
 **Board size** — `ROWS` and `COLS` in `js/game.js`. The CSS is driven by a `--cell` variable
 that `fit()` recalculates, so an odd board like 7×9 works without touching the stylesheet.

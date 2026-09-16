@@ -11,7 +11,7 @@ window.RuneProgress = (() => {
   "use strict";
 
   const KEY = "runefall.progress.v1";
-  const EMPTY = { level: 1, zeny: 0, charges: 0, seen: [] };
+  const EMPTY = { level: 1, zeny: 0, charges: 0, seen: [], sfxOff: false, bgmOff: false };
 
   let memoryOnly = false;
   let fallback = null;
@@ -34,7 +34,9 @@ window.RuneProgress = (() => {
       level:   Math.max(1, Math.floor(Number(raw.level)   || 1)),
       zeny:    Math.max(0, Math.floor(Number(raw.zeny)    || 0)),
       charges: Math.max(0, Math.floor(Number(raw.charges) || 0)),
-      seen:    Array.isArray(raw.seen) ? raw.seen.filter(v => typeof v === "string") : []
+      seen:    Array.isArray(raw.seen) ? raw.seen.filter(v => typeof v === "string") : [],
+      sfxOff:  !!raw.sfxOff,
+      bgmOff:  !!raw.bgmOff
     };
   }
 
@@ -43,7 +45,9 @@ window.RuneProgress = (() => {
       level:   Math.max(1, Math.floor(state.level   || 1)),
       zeny:    Math.max(0, Math.floor(state.zeny    || 0)),
       charges: Math.max(0, Math.floor(state.charges || 0)),
-      seen:    Array.isArray(state.seen) ? state.seen.slice(0, 40) : []
+      seen:    Array.isArray(state.seen) ? state.seen.slice(0, 40) : [],
+      sfxOff:  !!state.sfxOff,
+      bgmOff:  !!state.bgmOff
     };
     fallback = clean;
     if (memoryOnly) return clean;

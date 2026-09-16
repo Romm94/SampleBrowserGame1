@@ -231,9 +231,6 @@ body::before{
   .goal b{font-size:13px; min-width:40px}
 
   .frame{padding:7px 12px; border-radius:14px}
-  .vine{width:22px; background-size:22px 85px}
-  .vine-l{left:-11px}
-  .vine-r{right:-11px}
 
   /* overlays live inside the board frame, which is small here */
   .veil{padding:15px; overflow-y:auto}
@@ -493,53 +490,73 @@ body::before{
 .art{
   display:block; width:100%; height:100%;
   background-image:url("../assets/sprites.png");
-  background-size:500% 200%;
+  background-size:500% 400%;
   background-repeat:no-repeat;
 }
-.art-ember {background-position:  0%   0%}
-.art-amber {background-position: 25%   0%}
-.art-moss  {background-position: 50%   0%}
-.art-frost {background-position: 75%   0%}
-.art-wraith{background-position:100%   0%}
-.art-bone  {background-position:  0% 100%}
-.art-row   {background-position: 25% 100%}
-.art-col   {background-position: 50% 100%}
-.art-bomb  {background-position: 75% 100%}
-.art-orb   {background-position:100% 100%}
+.art-ember   {background-position:      0%       0%}
+.art-amber   {background-position:     25%       0%}
+.art-moss    {background-position:     50%       0%}
+.art-frost   {background-position:     75%       0%}
+.art-wraith  {background-position:    100%       0%}
+.art-bone    {background-position:      0%  33.333%}
+.art-row     {background-position:     25%  33.333%}
+.art-col     {background-position:     50%  33.333%}
+.art-bomb    {background-position:     75%  33.333%}
+.art-orb     {background-position:    100%  33.333%}
+.art-frozen  {background-position:      0%  66.667%}
+.art-bramble {background-position:     25%  66.667%}
+.art-creeper {background-position:     50%  66.667%}
+.art-mrow    {background-position:      0%     100%}
+.art-mcol    {background-position:     25%     100%}
+.art-mbomb   {background-position:     50%     100%}
 
 .tile .art{width:94%; height:94%; margin:3%}
 .goal-art{display:block; width:32px; height:32px; flex:none}
 .legend .art{width:26px; height:26px; flex:none}
 
-/* rune marks sit over the slime so its colour is still readable underneath */
-.rune{position:absolute; inset:0; pointer-events:none}
-.rune::before, .rune::after{
-  content:""; position:absolute; background:#fffbe9; border-radius:3px;
-  box-shadow:0 0 7px #fff, 0 0 15px rgba(233,196,106,.95);
+/* The rune mark sits over the slime so its colour still reads underneath.
+   Sized at 76% with a drop shadow rather than filling the cell — at full bleed
+   the mark crowded the slime and both became hard to read. */
+.rune{
+  position:absolute; left:12%; top:12%; width:76%; height:76%;
+  pointer-events:none;
+  filter:drop-shadow(0 0 5px rgba(255,255,255,.95))
+         drop-shadow(0 0 13px rgba(233,196,106,.8));
 }
-.rune-row::before{left:8%; right:8%; top:41%; height:10%}
-.rune-row::after {left:8%; right:8%; top:57%; height:10%}
-.rune-col::before{top:8%; bottom:8%; left:41%; width:10%}
-.rune-col::after {top:8%; bottom:8%; left:57%; width:10%}
-.rune-bomb::before{
-  left:26%; top:26%; width:48%; height:48%; background:none; border-radius:50%;
-  border:4px solid #fffbe9; box-shadow:0 0 8px #fff, 0 0 18px rgba(255,120,80,.95);
-}
-.rune-bomb::after{
-  left:47%; top:6%; width:6%; height:88%; border-radius:3px; opacity:.85;
-}
+.rune .art{width:100%; height:100%}
+.tile[data-special] .art:first-child{filter:saturate(.85) brightness(.82)}
+
 
 /* ===================================================================
-   Vines down the board sides
+   Old tree vine across the board
+   Sits behind the slimes, so it reads as the board's own surface rather
+   than as something in the way.
    =================================================================== */
-.vine{
-  position:absolute; top:-6px; bottom:-6px; width:28px; z-index:3;
-  pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2234%22%20height%3D%22132%22%20viewBox%3D%220%200%2034%20132%22%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%233f7d3a%22%20stroke-width%3D%224.5%22%20stroke-linecap%3D%22round%22%3E%20%3Cpath%20d%3D%22M17%200%20C27%2018%207%2034%2017%2050%20C27%2066%207%2082%2017%2098%20C24%20110%2014%20122%2017%20132%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%235aa84f%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20opacity%3D%22.85%22%3E%20%3Cpath%20d%3D%22M17%200%20C27%2018%207%2034%2017%2050%20C27%2066%207%2082%2017%2098%20C24%20110%2014%20122%2017%20132%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%234e9c43%22%20stroke%3D%22%232f6b2c%22%20stroke-width%3D%221.5%22%3E%20%3Cpath%20d%3D%22M22%2014%20C31%209%2033%2017%2027%2022%20C22%2026%2019%2021%2022%2014%20Z%22%2F%3E%20%3Cpath%20d%3D%22M10%2040%20C2%2034%201%2043%207%2047%20C12%2050%2014%2046%2010%2040%20Z%22%2F%3E%20%3Cpath%20d%3D%22M24%2066%20C33%2061%2035%2069%2029%2074%20C24%2078%2021%2073%2024%2066%20Z%22%2F%3E%20%3Cpath%20d%3D%22M9%2092%20C1%2086%200%2095%206%2099%20C11%20102%2013%2098%209%2092%20Z%22%2F%3E%20%3Cpath%20d%3D%22M23%20116%20C32%20111%2034%20119%2028%20124%20C23%20128%2020%20123%2023%20116%20Z%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%237fc96f%22%20opacity%3D%22.55%22%3E%20%3Cpath%20d%3D%22M23%2015%20C29%2012%2030%2017%2026%2020%20Z%22%2F%3E%20%3Cpath%20d%3D%22M9%2041%20C4%2037%203%2042%207%2045%20Z%22%2F%3E%20%3Cpath%20d%3D%22M25%2067%20C31%2064%2032%2069%2028%2072%20Z%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%23cfe9a8%22%20opacity%3D%22.9%22%3E%20%3Ccircle%20cx%3D%2227%22%20cy%3D%2230%22%20r%3D%222.4%22%2F%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2258%22%20r%3D%222.2%22%2F%3E%20%3Ccircle%20cx%3D%2228%22%20cy%3D%2284%22%20r%3D%222.3%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%22108%22%20r%3D%222%22%2F%3E%20%3C%2Fg%3E%20%3C%2Fsvg%3E");
-  background-repeat:repeat-y;
-  background-size:28px 109px;
-  filter:drop-shadow(0 2px 4px rgba(0,0,0,.65));
-  opacity:.95;
+.board::before{
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%234a2f1c%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%2230%22%3E%20%3Cpath%20d%3D%22M-30%20640%20C%20120%20620%20190%20520%20300%20470%20C%20410%20420%20470%20330%20600%20300%20C%20700%20276%20760%20210%20840%20190%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%236b452a%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%2222%22%3E%20%3Cpath%20d%3D%22M-30%20640%20C%20120%20620%20190%20520%20300%20470%20C%20410%20420%20470%20330%20600%20300%20C%20700%20276%20760%20210%20840%20190%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%238a5c36%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%228%22%20opacity%3D%22.75%22%3E%20%3Cpath%20d%3D%22M-20%20634%20C%20130%20612%20196%20514%20306%20464%20C%20416%20414%20476%20324%20606%20294%20C%20706%20270%20764%20204%20840%20184%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%235c3a22%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%2213%22%3E%20%3Cpath%20d%3D%22M170%20560%20C%20150%20500%20190%20452%20250%20430%22%2F%3E%20%3Cpath%20d%3D%22M360%20430%20C%20372%20366%20340%20322%20286%20300%22%2F%3E%20%3Cpath%20d%3D%22M520%20344%20C%20545%20288%20520%20240%20470%20220%22%2F%3E%20%3Cpath%20d%3D%22M660%20268%20C%20690%20320%20672%20372%20620%20396%22%2F%3E%20%3Cpath%20d%3D%22M100%20628%20C%2060%20570%2078%20512%20130%20486%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%235c3a22%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%227%22%20opacity%3D%22.9%22%3E%20%3Cpath%20d%3D%22M250%20430%20C%20268%20404%20262%20380%20240%20366%22%2F%3E%20%3Cpath%20d%3D%22M286%20300%20C%20258%20288%20240%20300%20232%20320%22%2F%3E%20%3Cpath%20d%3D%22M470%20220%20C%20452%20196%20428%20196%20412%20210%22%2F%3E%20%3Cpath%20d%3D%22M620%20396%20C%20606%20420%20612%20442%20632%20452%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%233f6b32%22%20opacity%3D%22.85%22%3E%20%3Cpath%20d%3D%22M246%20358%20C%20224%20340%20228%20312%20252%20316%20C%20272%20320%20272%20350%20246%20358%20Z%22%2F%3E%20%3Cpath%20d%3D%22M230%20322%20C%20206%20330%20186%20316%20200%20298%20C%20212%20283%20238%20298%20230%20322%20Z%22%2F%3E%20%3Cpath%20d%3D%22M412%20212%20C%20392%20194%20398%20168%20420%20174%20C%20438%20179%20436%20206%20412%20212%20Z%22%2F%3E%20%3Cpath%20d%3D%22M634%20454%20C%20656%20470%20650%20496%20628%20490%20C%20610%20485%20612%20460%20634%20454%20Z%22%2F%3E%20%3Cpath%20d%3D%22M132%20484%20C%20110%20470%20114%20444%20136%20448%20C%20154%20452%20154%20478%20132%20484%20Z%22%2F%3E%20%3Cpath%20d%3D%22M556%20306%20C%20578%20292%20600%20306%20588%20324%20C%20577%20340%20550%20328%20556%20306%20Z%22%2F%3E%20%3Cpath%20d%3D%22M336%20452%20C%20314%20466%20292%20452%20304%20434%20C%20315%20418%20342%20430%20336%20452%20Z%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%23548a42%22%20opacity%3D%22.6%22%3E%20%3Cpath%20d%3D%22M248%20356%20C%20234%20344%20236%20326%20250%20328%20Z%22%2F%3E%20%3Cpath%20d%3D%22M414%20210%20C%20402%20198%20406%20182%20418%20184%20Z%22%2F%3E%20%3Cpath%20d%3D%22M630%20452%20C%20644%20462%20641%20478%20628%20476%20Z%22%2F%3E%20%3C%2Fg%3E%20%3C%2Fsvg%3E");
+  background-size:100% 100%;
+  background-repeat:no-repeat;
+  opacity:.5;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));
 }
-.vine-l{left:-14px}
-.vine-r{right:-14px; transform:scaleX(-1)}
+.tile, .blockers{position:absolute}
+.tile{z-index:1}
+
+/* the tools row carries two wide buttons and three icon toggles, so let it
+   wrap rather than squeezing the labels off the edge on a narrow phone */
+.tools{flex-wrap:wrap}
+.tools .btn:not(.mute){flex:1 1 40%; min-width:120px}
+.mute{flex:0 0 42px; width:42px}
+.mute.is-off{opacity:.45}
+.mute.is-off::after{
+  content:""; position:absolute; left:16%; right:16%; top:50%; height:2px;
+  background:var(--parch); transform:rotate(-24deg); border-radius:2px;
+}
+.mute{position:relative}
+
+/* a blocker that has taken a hit but is still standing */
+.blocker .art.is-chipped{opacity:.62; filter:saturate(.7)}
+/* bramble and creeper are both vines — tint them apart at a glance */
+.blocker[data-kind="bramble"] .art{filter:drop-shadow(0 0 6px rgba(200,60,80,.75))}
+.blocker[data-kind="creeper"] .art{filter:drop-shadow(0 0 7px rgba(110,220,90,.8))}
