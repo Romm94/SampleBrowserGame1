@@ -12,6 +12,20 @@ const ROWS = 8, COLS = 8;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+/* The page boots asynchronously (it awaits Lives.init), and on a busy machine
+   the scripts may not even have finished loading yet. Every test waits on this
+   rather than guessing a sleep — guessing produced flaky failures. */
+async function waitForBoot(doc, timeout = 6000){
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline){
+    const cell = parseFloat(doc.documentElement.style.getPropertyValue("--cell"));
+    const tiles = doc.querySelectorAll(".tile").length;
+    if (cell > 0 && tiles === ROWS * COLS) return true;
+    await sleep(50);
+  }
+  return false;
+}
+
 function cellSize(doc){
   return parseFloat(doc.documentElement.style.getPropertyValue("--cell")) || 56;
 }
@@ -116,4 +130,5 @@ async function playMove(window, doc, { smart = true, settle = 900 } = {}){
   return true;
 }
 
-module.exports = { ROWS, COLS, sleep, cellSize, posOf, readBoard, matchesOn, chooseMove, tap, playMove };
+module.exports = { ROWS, COLS, sleep, waitForBoot, cellSize, posOf, readBoard,
+                   matchesOn, chooseMove, tap, playMove };

@@ -2,6 +2,7 @@
    Run: node test/smoke.js     (needs jsdom: npm install jsdom)
    Catches runtime errors that a syntax check cannot, like calling a function
    before the data it reads exists. */
+const { waitForBoot } = require("./bot");
 const { JSDOM, VirtualConsole } = require("jsdom");
 const path = require("path");
 const http = require("http");
@@ -69,7 +70,7 @@ function serve(){
   window.addEventListener("error", e => errors.push("window.onerror: " + e.message));
   window.addEventListener("unhandledrejection", e => errors.push("unhandled rejection: " + e.reason));
 
-  await sleep(400);
+  if (!await waitForBoot(doc)) errors.push("the game never finished booting");
 
   console.log("\nboot");
   check("no errors while loading", errors.length === 0, errors[0]);

@@ -500,11 +500,7 @@
       const gained = clear.size * 60 * combo;
       addScore(gained);
       blip(420 + combo * 90, .1, "triangle");
-      if (combo > 1){
-        comboEl.textContent = "Combo ×" + combo;
-        comboEl.classList.remove("show"); void comboEl.offsetWidth;
-        comboEl.classList.add("show");
-      }
+      if (combo > 1) announce("Combo ×" + combo);
       if (clear.size){
         const first = parse([...clear][0]);
         floatPts(first[0], first[1], "+" + gained);
@@ -560,6 +556,9 @@
       for (const [dr,dc] of [[0,1],[1,0]]){
         const r2 = r + dr, c2 = c + dc;
         if (!inBounds(r2,c2) || isLocked(r2,c2)) continue;
+        // two runes side by side always combine, match or no match
+        if (id && board[r2][c2] && T(id).special && T(board[r2][c2]).special)
+          return [K(r,c), K(r2,c2)];
         swap([r,c],[r2,c2]);
         const ok = findRuns().length > 0;
         swap([r,c],[r2,c2]);
@@ -1023,6 +1022,124 @@
     const t = board[r1][c1]; board[r1][c1] = board[r2][c2]; board[r2][c2] = t;
   }
 
+  /* ---------------- rune combinations ----------------
+     Swapping two runes together does something bigger than either alone,
+     following the conventions players already know from other match-3 games:
+     two lines cross, a line plus a blast widens into a band, two blasts go
+     wide, and the orb converts an entire colour into copies of its partner. */
+  const isLine = sp => sp === "row" || sp === "col";
+
+  const COMBO_NAME = {
+    cross:      "Crossed runes",
+    band:       "Rune storm",
+    mega:       "Twin blast",
+    "orb-line": "Orb of lines",
+    "orb-bomb": "Orb of blasts",
+    board:      "Ragnarök"
+  };
+
+  function comboOf(ta, tb){
+    if (!ta || !tb || !ta.special || !tb.special) return null;
+    const sa = ta.special, sb = tb.special;
+    if (sa === "rainbow" && sb === "rainbow") return "board";
+    if (sa === "rainbow" || sb === "rainbow"){
+      const other = sa === "rainbow" ? sb : sa;
+      if (isLine(other)) return "orb-line";
+      if (other === "bomb") return "orb-bomb";
+      return null;                       // orb + plain slime is not a combo
+    }
+    if (isLine(sa) && isLine(sb)) return "cross";
+    if (sa === "bomb" && sb === "bomb") return "mega";
+    if (isLine(sa) && sb === "bomb") return "band";
+    if (sa === "bomb" && isLine(sb)) return "band";
+    return null;
+  }
+
+  function comboCells(kind, ta, tb){
+    const clear = new Set([K(ta.r, ta.c), K(tb.r, tb.c)]);
+    const r = tb.r, c = tb.c;
+    const addRow = rr => { for (let cc = 0; cc < COLS; cc++) clear.add(K(rr,cc)); };
+    const addCol = cc => { for (let rr = 0; rr < ROWS; rr++) clear.add(K(rr,cc)); };
+
+    if (kind === "cross"){ addRow(r); addCol(c); }
+
+    if (kind === "band"){                // three rows and three columns
+      for (let d = -1; d <= 1; d++){
+        if (r + d >= 0 && r + d < ROWS) addRow(r + d);
+        if (c + d >= 0 && c + d < COLS) addCol(c + d);
+      }
+    }
+
+    if (kind === "mega"){                // 5x5
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++)
+        if (inBounds(r+dr, c+dc)) clear.add(K(r+dr, c+dc));
+    }
+
+    if (kind === "board"){
+      for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++) clear.add(K(rr,cc));
+    }
+
+    if (kind === "orb-line" || kind === "orb-bomb"){
+      // the orb takes its partner's colour, turns every slime of that colour
+      // into a copy of the partner rune, and sets them all off together
+      const other = ta.special === "rainbow" ? tb : ta;
+      const ty = other.type;
+      let flip = 0;
+      for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++){
+        const id = board[rr][cc]; if (!id) continue;
+        const t = T(id);
+        if (t.type !== ty || t.special === "rainbow") continue;
+        t.special = kind === "orb-bomb" ? "bomb" : (flip++ % 2 ? "col" : "row");
+        t.el.innerHTML = tileMarkup(t);
+        clear.add(K(rr,cc));
+      }
+    }
+    return clear;
+  }
+
+  /* A combo name is worth reading, and the cascade it sets off would otherwise
+     overwrite it within a few hundred milliseconds. hold keeps the banner until
+     it has had its moment; anything arriving inside that window is dropped. */
+  let announceUntil = 0;
+  function announce(text, hold = 700){
+    const now = performance.now();
+    if (now < announceUntil) return;
+    announceUntil = now + hold;
+    comboEl.textContent = text;
+    comboEl.classList.remove("show"); void comboEl.offsetWidth;
+    comboEl.classList.add("show");
+  }
+
+  /* pop, score, chip blockers, drop — shared by every detonation */
+  async function detonate(clear, pointsPer, origin){
+    expandSpecials(clear);
+    const gained = clear.size * pointsPer;
+    addScore(gained);
+    if (origin) floatPts(origin.r, origin.c, "+" + gained);
+
+    let chipped = 0;
+    for (const k of clear){
+      const [r,c] = parse(k);
+      if (chipBlocker(r,c)) chipped++;
+      const id = board[r][c]; if (!id) continue;
+      const t = T(id);
+      const goal = goals.find(g => g.kind === "collect" && g.type === t.type);
+      if (goal && goal.have < goal.need) goal.have++;
+      t.el.classList.add("pop");
+    }
+    if (chipped) addScore(chipped * 40);
+    refreshGoals();
+
+    await sleep(260);
+    for (const k of clear){
+      const [r,c] = parse(k);
+      const id = board[r][c]; if (!id) continue;
+      destroy(T(id)); board[r][c] = null;
+    }
+    collapse();
+    await sleep(290);
+  }
+
   async function trySwap(a,b){
     if (busy || !started || locked) return;
     const [ar,ac] = parse(a), [br,bc] = parse(b);
@@ -1036,44 +1153,39 @@
     await sleep(230);
 
     const ta = tileAt(a), tb = tileAt(b);
+    const kind = comboOf(ta, tb);
     const rainbow = [ta,tb].find(t => t && t.special === "rainbow");
 
-    if (rainbow){
+    if (kind){
+      announce(COMBO_NAME[kind], 1800);
+      const clear = comboCells(kind, ta, tb);
+      // the two runes' own effects are already folded into the combo area, so
+      // clear them to stop expandSpecials firing them a second time
+      if (kind === "orb-line" || kind === "orb-bomb"){
+        (ta.special === "rainbow" ? ta : tb).special = null;
+      } else {
+        ta.special = null; tb.special = null;
+      }
+      spendMove();
+      sweep(280, 1500, .55);
+      await detonate(clear, 100, tb);
+      await resolve(null);
+
+    } else if (rainbow){
       const other = rainbow === ta ? tb : ta;
       const clear = new Set([K(rainbow.r, rainbow.c)]);
-      if (other && other.special === "rainbow"){
-        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) clear.add(K(r,c));
-      } else if (other){
+      if (other){
         const ty = other.type;
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
           const id = board[r][c]; if (id && T(id).type === ty) clear.add(K(r,c));
         }
       }
       rainbow.special = null;
-      expandSpecials(clear);
       spendMove();
-      const gained = clear.size * 80;
-      addScore(gained);
-      floatPts(rainbow.r, rainbow.c, "+" + gained);
       blip(1100, .3, "sine", .22);
-      for (const k of clear){
-        const [r,c] = parse(k);
-        chipBlocker(r,c);
-        const id = board[r][c]; if (!id) continue;
-        const t = T(id);
-        const goal = goals.find(g => g.kind === "collect" && g.type === t.type);
-        if (goal && goal.have < goal.need) goal.have++;
-        t.el.classList.add("pop");
-      }
-      refreshGoals();
-      await sleep(260);
-      for (const k of clear){
-        const [r,c] = parse(k); const id = board[r][c]; if (!id) continue;
-        destroy(T(id)); board[r][c] = null;
-      }
-      collapse();
-      await sleep(290);
+      await detonate(clear, 80, rainbow);
       await resolve(null);
+
     } else if (findRuns().length){
       spendMove();
       await resolve([a,b]);

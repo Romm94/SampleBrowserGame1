@@ -6,7 +6,7 @@ const path = require("path");
 const http = require("http");
 const fs = require("fs");
 
-const { sleep, cellSize, posOf, tap, playMove } = require("./bot");
+const { sleep, waitForBoot, cellSize, posOf, readBoard, tap, playMove } = require("./bot");
 
 const ROOT = path.resolve(__dirname, "..");
 const isFontNoise = s => /fonts\.(googleapis|gstatic)\.com/.test(s);
@@ -57,7 +57,8 @@ async function boot(origin, { progress, timeScale } = {}){
       }
     }
   });
-  await sleep(350);
+  const ready = await waitForBoot(dom.window.document);
+  if (!ready) errors.push("the game never finished booting");
   return { dom, window: dom.window, doc: dom.window.document, errors };
 }
 
@@ -114,8 +115,13 @@ async function boot(origin, { progress, timeScale } = {}){
     }
 
     const before = doc.querySelectorAll(".blocker").length;
-    for (let i = 0; i < 14; i++) if (!await playMove(window, doc, { smart: true })) break;
-    const after = doc.querySelectorAll(".blocker").length;
+    let after = before;
+    // play until a blocker actually goes, rather than a fixed number of moves —
+    // whether any given move can reach one depends on where they landed
+    for (let i = 0; i < 24 && after >= before; i++){
+      if (!await playMove(window, doc, { smart: true })) break;
+      after = doc.querySelectorAll(".blocker").length;
+    }
     check("blockers get cleared by play", after < before, before + " -> " + after);
     dom.window.close();
   }
@@ -174,6 +180,55 @@ async function boot(origin, { progress, timeScale } = {}){
     check("shown the retry overlay", !doc.getElementById("veil").hidden);
     check("no continue offered", !/zeny/i.test(doc.getElementById("veilBtn").textContent),
           doc.getElementById("veilBtn").textContent);
+    dom.window.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n6. two runes combine when swapped together");
+  {
+    const { dom, window, doc } = await boot(origin, { progress: { level: 1, zeny: 0, charges: 2 } });
+    doc.getElementById("veilBtn").click();
+    await sleep(400);
+
+    check("mute button is off the board", !doc.querySelector(".frame #muteBtn"));
+    check("mute button sits with the tools", !!doc.querySelector(".tools #muteBtn"));
+
+    const cell = cellSize(doc);
+    const { grid } = readBoard(doc, cell);
+    const a = grid[4][3], b = grid[4][4];
+    check("found two adjacent tiles", !!a && !!b);
+
+    // spend both carried charges to put a blast rune on each
+    const isBlast = el => el.innerHTML.includes('stroke-width="5"');
+    for (const t of [a, b]){
+      doc.getElementById("chargeBtn").click();
+      await sleep(70);
+      tap(window, t.el);
+      await sleep(150);
+    }
+    const blasts = [...doc.querySelectorAll(".tile")].filter(isBlast).length;
+    check("two blast runes placed", blasts === 2, blasts + " on the board");
+
+    const before = Number(doc.getElementById("score").textContent.replace(/,/g, ""));
+    tap(window, a.el);
+    await sleep(90);
+    tap(window, b.el);
+
+    // watch the banner while the blast resolves rather than checking one moment
+    let announced = null;
+    for (let i = 0; i < 30; i++){
+      const text = doc.getElementById("combo").textContent;
+      if (text && text !== "Combo ×2") announced = text;
+      await sleep(70);
+    }
+
+    check("the combination is named on screen", announced === "Twin blast",
+          announced || "(nothing shown)");
+    const after = Number(doc.getElementById("score").textContent.replace(/,/g, ""));
+    check("it scored far more than a plain match", after - before > 1500,
+          before + " -> " + after);
+    check("board refilled afterwards", doc.querySelectorAll(".tile").length === 64,
+          doc.querySelectorAll(".tile").length + " tiles");
     dom.window.close();
   }
 

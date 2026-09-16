@@ -35,6 +35,24 @@ more of the same colour and they pop. Bigger matches leave a rune behind:
 | 5 in an L or T | Bomb rune | Blasts the surrounding 3×3 |
 | 5 in a straight line | Rainbow orb | Swap it with any slime to erase every slime of that colour |
 
+### Combining runes
+
+Swap two runes into each other and they combine into something bigger. The combinations
+follow the conventions players already know from other match-3 games:
+
+| Swap | Result |
+| --- | --- |
+| Line + line | Clears the full row **and** column through that cell |
+| Line + blast | Sweeps three rows and three columns |
+| Blast + blast | Levels a 5×5 area |
+| Orb + line | Every slime of the line rune's colour becomes a line rune, then they all fire |
+| Orb + blast | Every slime of that colour becomes a blast rune, then they all fire |
+| Orb + orb | Clears the entire board |
+
+Each combination is named on screen as it fires. Two runes sitting next to each other always
+count as a legal move even when they'd make no match, so the board won't declare itself stuck
+while a combination is available, and the hint will point one out.
+
 Runes caught in another match set each other off, so chains are worth building. Each quest
 asks you to collect a set number of specific slimes before **both** the move budget and the
 clock run out. The board reshuffles itself if no valid move is left. There's a hint button,
@@ -234,7 +252,12 @@ restoring, blockers placing and chipping, bramble cells refusing selection, scor
 continue offer and its zeny charge, and the no-zeny path that spends a life instead. It speeds
 up `performance.now` to drain a stage clock in seconds so timeouts are testable.
 
-`test/bot.js` is shared by both harnesses.
+`test/viewport.js` boots at real device dimensions and checks the board fits across the
+screen, stays tappable, and leaves room for the HUD. It's honest about its limit: jsdom has no
+layout engine, so it verifies the sizing arithmetic — the usual cause of "cut off on mobile" —
+but cannot see visual clipping. Stacking order still needs a real device.
+
+`test/bot.js` is shared by the harnesses.
 
 It serves the folder on a random port during the run, because jsdom refuses `localStorage`
 on `file://` origins. Exit code is non-zero if anything fails. Worth running before you
@@ -259,6 +282,7 @@ rune-fall/
 │   ├── smoke.js            headless boot-and-play check
 │   ├── features.js         progress, blockers, score quests, continues
 │   ├── balance.js          bot playthroughs for tuning goal sizes
+│   ├── viewport.js         board sizing across device dimensions
 │   └── bot.js              shared board reader and move chooser
 ├── assets/
 │   ├── favicon.svg         slime mascot, browser tab icon
@@ -297,8 +321,12 @@ matches; balance runs showed 2 made the blocker goal the only thing that mattere
 **Lives and regeneration** — `MAX` and `REGEN_MS` at the top of `js/lives.js`, mirrored in
 `server/lives-server.example.js`. Change both or they'll disagree.
 
-**Scoring** — `clear.size * 60 * combo` in `resolve()`, 80 per tile for rainbow detonations,
-and the speed bonus in `completeQuest()`.
+**Scoring** — `clear.size * 60 * combo` in `resolve()`, 80 per tile for a plain orb
+detonation, 100 for a rune combination, and the speed bonus in `completeQuest()`.
+
+**Combinations** — `comboOf()` decides which pairing was swapped and `comboCells()` builds the
+area it destroys. Both are near the bottom of `js/game.js`, next to the shared `detonate()`
+that every explosion routes through.
 
 **Falling leaves** — `js/leaves.js`. `COLORS` sets the palette, `count()` sets density per
 viewport width, `spawn()` controls fall speed, sway, spin and opacity. Shares nothing with
@@ -306,11 +334,41 @@ the game, so you can delete the file and its `<script>` tag for a bare field.
 
 **Theme palette** — the `:root` block in `css/styles.css`.
 
+## Phones and tablets
+
+The layout has three modes, and the board is sized by `fit()` in `js/game.js` to suit each:
+
+| Screen | Layout | Board gets |
+| --- | --- | --- |
+| 820px and wider | HUD column beside the board | Whatever height is left, capped at 480px |
+| Narrower, portrait | Title, zeny/moves, clock and lives above; goals and buttons below | 48% of the viewport height |
+| Narrower, landscape under 560px tall | HUD back beside the board, title and legend hidden | Nearly the full height |
+
+Sizing reads `window.visualViewport` where available, so the board shrinks to what's genuinely
+on screen rather than to `innerHeight`, which on mobile includes the area behind the address
+bar. It re-fits on resize, on orientation change, and on visual-viewport changes.
+
+Portrait puts the clock, moves and lives *above* the board and the goals directly below it, so
+everything you need mid-quest is visible at once. The legend is hidden on phones — it's
+reference text, not something you read during a quest.
+
+Two layout details worth knowing if you restyle:
+
+- `body` uses `align-items:safe center`, with a plain `center` before it as a fallback.
+  Ordinary `center` on a flex container pushes overflow off the **top** of the page, where no
+  amount of scrolling reaches it. That was a real bug here.
+- On phones `.panel` becomes `display:contents` so its children are grid items of `.game` and
+  can be ordered individually. Without that, the HUD moves as one block and lands below the
+  board, off screen.
+
+`viewport-fit=cover` plus `env(safe-area-inset-*)` padding keeps things clear of notches and
+home indicators. Pinch zoom is deliberately left enabled — the board sets `touch-action:none`
+so its own gestures aren't affected, and blocking zoom page-wide is an accessibility problem.
+
 ## Browser support
 
-Any current browser. Uses pointer events, CSS custom properties, `conic-gradient` and a 2D
-canvas. Works on phones — the board scales to the viewport, swipe input is handled, and leaf
-density drops on small screens.
+Any current browser. Uses pointer events, CSS custom properties, `conic-gradient`, `dvh` units
+and a 2D canvas. Swipe input is handled, and leaf density drops on small screens.
 
 `prefers-reduced-motion` is respected throughout: CSS animations collapse to near-instant and
 the leaves render as a still scatter with no loop running. The leaf loop and the stage clock

@@ -8,7 +8,7 @@ const path = require("path");
 const http = require("http");
 const fs = require("fs");
 
-const { sleep, cellSize, chooseMove, tap, playMove } = require("./bot");
+const { sleep, waitForBoot, cellSize, chooseMove, tap, playMove } = require("./bot");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -44,7 +44,7 @@ async function runQuest(origin, level, smart){
   });
   const { window } = dom;
   const doc = window.document;
-  await sleep(350);
+  await waitForBoot(doc);
 
   const goalText = () => [...doc.querySelectorAll("#goals .goal b")].map(b => b.textContent).join("  ");
   const zeny = () => Number(doc.getElementById("score").textContent.replace(/,/g, ""));

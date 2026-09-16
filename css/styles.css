@@ -180,7 +180,7 @@ body::before{
 .veil .tally{font-size:15px; color:var(--parch)}
 .veil .tally b{color:var(--gold); font-size:22px}
 
-.mute{position:absolute; right:12px; top:12px; width:34px; height:34px; padding:0; flex:none; font-size:15px}
+.mute{flex:0 0 44px; width:44px; padding:0; font-size:16px; line-height:1}
 /* ===================================================================
    Portrait phones
    .panel becomes display:contents so its children are grid items of
@@ -194,6 +194,8 @@ body::before{
     grid-template-columns:2fr 1fr;
     gap:9px;
     align-items:start;
+    justify-items:stretch;   /* the base rule centres items, which shrink-wraps
+                                every panel instead of filling its column */
     max-width:560px;
   }
   .panel{display:contents}
@@ -252,7 +254,8 @@ body::before{
 @media(max-width:819px) and (orientation:landscape) and (max-height:560px){
   body{align-items:flex-start; padding-top:8px}
 
-  .game{grid-template-columns:196px auto; gap:10px; max-width:none; align-items:start}
+  .game{grid-template-columns:196px auto; gap:10px; max-width:none;
+        align-items:start; justify-items:stretch}
   .panel{display:grid; gap:7px; order:0}
   .stage{order:1}
   .crest, .legend{display:none}
@@ -395,3 +398,5 @@ body::before{
 
 /* goal rows for the non-collect objectives reuse the slime row layout */
 .goal svg{border-radius:7px}
+
+.legend-note{margin:9px 0 0; padding-top:8px; border-top:1px solid rgba(233,196,106,.18); color:#9b91c4}
