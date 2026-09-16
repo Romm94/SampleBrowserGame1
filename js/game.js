@@ -38,6 +38,10 @@
   const heartsEl = document.getElementById("hearts");
   const regenEl  = document.getElementById("regen");
   const chargeBtn= document.getElementById("chargeBtn");
+  const pickerEl = document.getElementById("picker");
+  const tipEl    = document.getElementById("tip");
+  const helpEl   = document.getElementById("help");
+  const frameEl  = document.querySelector(".frame");
   const warpEl   = document.getElementById("warp");
   const warpBody = document.getElementById("warpBody");
   const veil     = document.getElementById("veil");
@@ -58,7 +62,8 @@
   let questKind = "collect", scoreTarget = 0, scoreAtStart = 0, blockerTotal = 0;
   let continues = 0;
   let stagePlan = { frost: 0, bramble: 0 };
-  let charges = 0, armed = false;
+  let charges = 0, armed = false, chargeRune = "bomb";
+  let seenTips = [];
   let selected = null, hintTimer = null;
 
   // timer
@@ -136,11 +141,32 @@
       o.start(); o.stop(audio.currentTime + dur);
     } catch(e){}
   }
+  function chord(freqs, dur = .5, type = "triangle", vol = .13){
+    freqs.forEach((f, i) => setTimeout(() => blip(f, dur, type, vol), i * 55));
+  }
+  function boom(){
+    if (muted) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const len = Math.floor(audio.sampleRate * 0.5);
+      const buf = audio.createBuffer(1, len, audio.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/len, 3);
+      const src = audio.createBufferSource(); src.buffer = buf;
+      const lp = audio.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 420;
+      const g = audio.createGain(); g.gain.value = .5;
+      src.connect(lp).connect(g).connect(audio.destination);
+      src.start();
+    } catch (e){}
+  }
+
   document.getElementById("muteBtn").onclick = e => {
     muted = !muted;
+    if (window.RuneMusic) RuneMusic.setMuted(muted);
     e.currentTarget.textContent = muted ? "✕" : "♪";
     e.currentTarget.style.opacity = muted ? .5 : 1;
   };
+  if (window.RuneMusic) RuneMusic.init();
 
   /* ---------------- sizing ---------------- */
   function fit(){
@@ -448,6 +474,73 @@
     setTimeout(() => f.remove(), 400);
   }
 
+  const calmMotion = () => window.matchMedia
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function shake(hard){
+    if (calmMotion() || !frameEl) return;
+    frameEl.classList.remove("shake", "shake-hard");
+    void frameEl.offsetWidth;
+    frameEl.classList.add("shake");
+    if (hard) frameEl.classList.add("shake-hard");
+    setTimeout(() => frameEl.classList.remove("shake", "shake-hard"), 1300);
+  }
+
+  function sparks(r, c, count, colour){
+    if (calmMotion()) return;
+    const s = cellPx();
+    for (let i = 0; i < count; i++){
+      const p = document.createElement("div");
+      p.className = "spark";
+      const angle = Math.random() * Math.PI * 2;
+      const dist = s * (0.7 + Math.random() * 2.4);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      p.style.left = (c * s + s / 2) + "px";
+      p.style.top  = (r * s + s / 2) + "px";
+      p.style.color = colour;
+      p.style.background = colour;
+      p.style.animationDelay = Math.round(Math.random() * 110) + "ms";
+      boardEl.appendChild(p);
+      setTimeout(() => p.remove(), 950);
+    }
+  }
+
+  function shockwave(r, c, reach){
+    if (calmMotion()) return;
+    const s = cellPx();
+    const w = document.createElement("div");
+    w.className = "shockwave";
+    w.style.setProperty("--reach", reach * s + "px");
+    w.style.left = (c * s + s / 2) + "px";
+    w.style.top  = (r * s + s / 2) + "px";
+    boardEl.appendChild(w);
+    setTimeout(() => w.remove(), 620);
+  }
+
+  /* every combination gets its own sound and its own shape of blast, so the
+     good ones feel different rather than just scoring more */
+  function comboFx(kind, t){
+    const gold = "#ffe9a8", teal = "#8ff0e4", rose = "#ffb4b4";
+    if (kind === "cross"){
+      chord([520, 780], .3, "triangle", .15);
+      shockwave(t.r, t.c, 6); sparks(t.r, t.c, 16, gold); shake(false);
+    } else if (kind === "band"){
+      chord([440, 660, 880], .32, "triangle", .15);
+      shockwave(t.r, t.c, 8); sparks(t.r, t.c, 26, teal); shake(false);
+    } else if (kind === "mega"){
+      boom(); chord([180, 240], .5, "sawtooth", .12);
+      shockwave(t.r, t.c, 9); sparks(t.r, t.c, 34, rose); shake(true);
+    } else if (kind === "orb-line" || kind === "orb-bomb"){
+      sweep(400, 1800, .7); chord([660, 880, 1170], .45, "sine", .13);
+      shockwave(t.r, t.c, 12); sparks(t.r, t.c, 30, gold); shake(true);
+    } else if (kind === "board"){
+      boom(); chord([262, 392, 523, 784], .8, "sine", .16);
+      shockwave(t.r, t.c, 16); sparks(t.r, t.c, 46, gold); shake(true);
+    }
+    if (window.RuneMusic) RuneMusic.duck(kind === "board" ? 2200 : 1300);
+  }
+
   function floatPts(r, c, text){
     const s = cellPx(), p = document.createElement("div");
     p.className = "pts"; p.textContent = text;
@@ -535,12 +628,20 @@
         if (s.sp === "rainbow") t.type = -1;
         t.el.innerHTML = tileMarkup(t);
         blip(880, .16, "sine", .2);
+        tip("rune");
       }
 
       collapse();
       await sleep(290);
+      if (runesOnBoard() >= 2) tip("combine");
     }
     return combo;
+  }
+
+  function runesOnBoard(){
+    let n = 0;
+    tiles.forEach(t => { if (t.special) n++; });
+    return n;
   }
 
   /* ---------------- moves ---------------- */
@@ -715,11 +816,23 @@
   });
 
   /* ---------------- charges ---------------- */
+  const RUNE_LABEL = { row: "row rune", col: "column rune", bomb: "blast rune" };
+
   function renderCharges(){
-    chargeBtn.innerHTML = `Rune charge <b>×${charges}</b>`;
+    chargeBtn.innerHTML = `Place ${RUNE_LABEL[chargeRune]} <b>×${charges}</b>`;
     chargeBtn.disabled = charges <= 0;
+    pickerEl.hidden = charges <= 0;
     if (charges <= 0 && armed) disarm();
   }
+
+  pickerEl.querySelectorAll(".pick").forEach(btn => {
+    btn.onclick = () => {
+      chargeRune = btn.dataset.rune;
+      pickerEl.querySelectorAll(".pick").forEach(b => b.classList.toggle("is-on", b === btn));
+      renderCharges();
+      blip(620, .06, "sine", .1);
+    };
+  });
   function disarm(){
     armed = false;
     chargeBtn.classList.remove("armed");
@@ -737,8 +850,9 @@
     if (!t || t.special === "rainbow") return;
     if (isLocked(t.r, t.c)){ blip(150, .1, "sawtooth", .07); return; }
     charges--;
-    t.special = "bomb";
+    t.special = chargeRune;
     t.el.innerHTML = tileMarkup(t);
+    sparks(t.r, t.c, 10, "#ffe9a8");
     t.el.classList.remove("forge"); void t.el.offsetWidth;
     t.el.classList.add("forge");
     disarm();
@@ -787,6 +901,7 @@
   /* ---------------- warp ---------------- */
   async function warp(summaryHTML, questHTML){
     sweep(220, 1400, .9);
+    if (window.RuneMusic) RuneMusic.duck(2500);
     const cx = (COLS - 1) / 2, cy = (ROWS - 1) / 2;
     tiles.forEach(t => {
       const d = Math.hypot(t.c - cx, t.r - cy);
@@ -832,10 +947,19 @@
     busy = false;
     saveProgress();
     scheduleHint();
+
+    // introduce whatever this quest is the first to contain
+    setTimeout(() => {
+      tip("basics");
+      if (q.plan.frost)   tip("frost");
+      if (q.plan.bramble) tip("bramble");
+      if (q.kind === "score") tip("score");
+      if (charges > 0)    tip("charge");
+    }, 700);
   }
 
   function saveProgress(){
-    try { Progress.save({ level, zeny: score, charges }); } catch (e){}
+    try { Progress.save({ level, zeny: score, charges, seen: seenTips }); } catch (e){}
   }
   window.addEventListener("pagehide", saveProgress);
   window.addEventListener("beforeunload", saveProgress);
@@ -858,6 +982,7 @@
 
   async function completeQuest(){
     busy = true;
+    hideTip();
     pauseTimer();
     clearHint();
     disarm();
@@ -1022,6 +1147,50 @@
     const t = board[r1][c1]; board[r1][c1] = board[r2][c2]; board[r2][c2] = t;
   }
 
+  /* ---------------- onboarding ----------------
+     Each system is explained the first time the player actually meets it,
+     once ever, and the explanation is stored with their progress. The help
+     overlay repeats all of it on demand, because the legend is hidden on
+     phones and a tip you missed is otherwise gone for good. */
+  const TIPS = {
+    basics:  ["Line up three", "Tap a slime, then tap a neighbour to swap them. Three or more of a colour pops."],
+    rune:    ["You made a rune", "Bigger matches leave runes. Match one to set it off."],
+    combine: ["Two runes, one blast", "Swap two runes into each other and they combine into something much bigger."],
+    frost:   ["Frost", "The pale tiles are frost. Clear a match on top of one to chip it away."],
+    bramble: ["Bramble", "A bramble tile can't be swapped. Work a match into it from around the side."],
+    score:   ["A different quest", "This one wants zeny, not colours. Big cascades and rune combinations pay best."],
+    charge:  ["Carried runes", "Spare moves became rune charges. Pick a rune below, then tap any slime to place it."]
+  };
+
+  let tipTimer = null;
+  function tip(id){
+    if (!TIPS[id] || seenTips.includes(id) || locked) return;
+    seenTips.push(id);
+    saveProgress();
+    const [title, body] = TIPS[id];
+    tipEl.innerHTML = `<b>${title}</b>${body}<small>Tap to dismiss</small>`;
+    tipEl.hidden = false;
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(hideTip, 7000);
+  }
+  function hideTip(){ clearTimeout(tipTimer); tipEl.hidden = true; }
+  tipEl.onclick = hideTip;
+
+  function openHelp(){
+    hideTip();
+    helpEl.hidden = false;
+    pauseTimer();                       // reading the rules shouldn't cost time
+  }
+  function closeHelp(){
+    helpEl.hidden = true;
+    if (started && !locked && !busy && veil.hidden) resumeTimer();
+  }
+  document.getElementById("helpBtn").onclick = () => helpEl.hidden ? openHelp() : closeHelp();
+  document.getElementById("helpClose").onclick = closeHelp;
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !helpEl.hidden) closeHelp();
+  });
+
   /* ---------------- rune combinations ----------------
      Swapping two runes together does something bigger than either alone,
      following the conventions players already know from other match-3 games:
@@ -1167,7 +1336,7 @@
         ta.special = null; tb.special = null;
       }
       spendMove();
-      sweep(280, 1500, .55);
+      comboFx(kind, tb);
       await detonate(clear, 100, tb);
       await resolve(null);
 
@@ -1275,6 +1444,7 @@
     level = saved.level;
     score = saved.zeny;
     charges = Math.min(MAX_CHARGES, saved.charges);
+    seenTips = saved.seen || [];
     scoreAtStart = score;
 
     const preview = questFor(level);
@@ -1312,7 +1482,7 @@
       veilAlt.textContent = "Start over from quest 1";
       veilAlt.onclick = () => {
         Progress.clear();
-        level = 1; score = 0; charges = 0; scoreAtStart = 0;
+        level = 1; score = 0; charges = 0; scoreAtStart = 0; seenTips = [];
         addScore(0);
         renderCharges();
         begin();

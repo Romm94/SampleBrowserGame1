@@ -53,11 +53,17 @@
     </div>
 
     <button class="btn charge" id="chargeBtn" disabled>Rune charge <b>×0</b></button>
+    <div class="picker" id="picker" hidden role="group" aria-label="Which rune to place">
+      <button class="pick" data-rune="row"  title="Row rune" aria-label="Row rune"></button>
+      <button class="pick" data-rune="col"  title="Column rune" aria-label="Column rune"></button>
+      <button class="pick is-on" data-rune="bomb" title="Blast rune" aria-label="Blast rune"></button>
+    </div>
 
     <div class="tools">
       <button class="btn" id="hintBtn">Show a move</button>
       <button class="btn" id="restartBtn">Give up</button>
-      <button class="btn mute" id="muteBtn" title="Sound on or off" aria-label="Sound on or off">♪</button>
+      <button class="btn mute" id="helpBtn" title="How to play" aria-label="How to play">?</button>
+      <button class="btn mute" id="muteBtn" title="Sound or music on or off" aria-label="Sound or music on or off">♪</button>
     </div>
 
     <div class="tablet legend">
@@ -75,6 +81,49 @@
     <div class="frame">
       <div class="board" id="board" role="grid" aria-label="Slime board"><div class="blockers" id="blockers"></div></div>
       <div class="combo" id="combo"></div>
+      <div class="tip" id="tip" hidden aria-live="polite"></div>
+
+      <div class="veil help" id="help" hidden>
+        <div class="help-scroll">
+          <h2>How to play</h2>
+          <p class="help-lead">Swap two neighbouring slimes to line up three or more of a colour.
+          Finish the quest before the moves or the clock run out.</p>
+
+          <h3>Runes</h3>
+          <dl class="help-list">
+            <div><dt>Match 4 in a row</dt><dd>Row rune — clears its whole row</dd></div>
+            <div><dt>Match 4 in a column</dt><dd>Column rune — clears its whole column</dd></div>
+            <div><dt>Match 5 in an L or T</dt><dd>Blast rune — levels the 3×3 around it</dd></div>
+            <div><dt>Match 5 in a line</dt><dd>Orb — swap it with any slime to erase that colour</dd></div>
+          </dl>
+
+          <h3>Combining runes</h3>
+          <p>Swap two runes into each other and they combine. Two runes side by side always
+          count as a legal move, even with no match.</p>
+          <dl class="help-list">
+            <div><dt>Line + line</dt><dd>Clears the row and the column</dd></div>
+            <div><dt>Line + blast</dt><dd>Three rows and three columns</dd></div>
+            <div><dt>Blast + blast</dt><dd>Levels a 5×5</dd></div>
+            <div><dt>Orb + line</dt><dd>A whole colour becomes line runes, then all fire</dd></div>
+            <div><dt>Orb + blast</dt><dd>A whole colour becomes blast runes, then all fire</dd></div>
+            <div><dt>Orb + orb</dt><dd>Clears the board</dd></div>
+          </dl>
+
+          <h3>What blocks you</h3>
+          <dl class="help-list">
+            <div><dt>Frost</dt><dd>Chips away when you clear a match on top of it</dd></div>
+            <div><dt>Bramble</dt><dd>Locks its tile — work a match into it from around the side</dd></div>
+          </dl>
+
+          <h3>Zeny and lives</h3>
+          <p>Zeny is a wallet and survives losing. Clearing quickly pays a speed bonus. Run out
+          of moves or time and you can spend zeny to stay in, or give up and lose one of your
+          five lives. A life returns every 30 minutes. Unused moves become rune charges you
+          carry to the next quest — pick which rune to place, then tap a slime.</p>
+
+          <button class="btn gold" id="helpClose">Got it</button>
+        </div>
+      </div>
       <div class="warp" id="warp" hidden aria-live="polite">
         <div class="rings"><i></i><i></i><i></i></div>
         <div class="warp-body" id="warpBody"></div>
@@ -97,6 +146,7 @@
 -->
 <script src="js/lives.js"></script>
 <script src="js/progress.js"></script>
+<script src="js/music.js"></script>
 <script src="js/game.js"></script>
 <script src="js/leaves.js"></script>
 </body>

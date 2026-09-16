@@ -98,6 +98,17 @@ the same, as does pressing "Give up" — all three are failures and all three co
 you'd rather only the timer cost a life, remove the `failStage` calls from `endOfTurn()` and
 the restart button in `js/game.js`.
 
+## Learning the game
+
+The first time a player meets each system — the basics, their first rune, two runes on the
+board at once, frost, bramble, a score quest, carried charges — a short tip appears over the
+board and never appears again. Which tips have been seen is stored with progress, so it
+survives a refresh and resets with "start over".
+
+The **?** button opens the full rules at any time, and pauses the stage clock while it's open.
+This matters on phones, where the side legend is hidden for space: without it the combination
+rules would be unreachable on mobile.
+
 ## Zeny, and buying your way out
 
 Zeny is a wallet, not a run score. It survives failing a quest, because otherwise you could
@@ -110,6 +121,72 @@ quest restarts. Giving up deliberately always costs a life — no continue offer
 
 Continues are the reason the score bonus matters. Clearing fast earns the zeny that buys you
 out of a bad board later.
+
+## Music and sound
+
+Every sound effect is generated at runtime with the Web Audio API. Combinations get their own
+sounds: a two-note chord for a cross, a rising arpeggio for a rune storm, filtered noise for
+the big blasts.
+
+Background music plays from `assets/bgm.mp3`. `js/music.js` waits for both the track to load
+and the first tap before playing, since browsers block audio until the user interacts, and it
+ducks to a third of its volume during combinations and the warp so the effects still land. The
+`♪` button mutes music and effects together. Remove the file and the game runs silently with
+no errors — the module handles its absence.
+
+### The included loop
+
+The shipped track was prepared from a supplied recording:
+
+| | |
+| --- | --- |
+| Length | 82.5 s, seamless loop |
+| Loudness | −16.5 LUFS integrated, −1.5 dBTP ceiling |
+| Format | MP3, 128 kbps stereo, 44.1 kHz |
+| Size | 1.26 MB |
+
+The source was two minutes with a ten-second fade in and a fade to silence at the end. Looped
+as-is that would drop to near-silence for several seconds every two minutes, so the fades were
+trimmed to the sustained section (18 s to 106.5 s) and the tail was crossfaded over the head
+with a six-second equal-power curve. The seam sits within 2.2 dB, which is inaudible for
+ambient material. It was then normalised from −24.7 LUFS up to −16.5.
+
+To replace it, drop in a new `assets/bgm.mp3`. The same recipe, if you want to prepare one the
+same way, is in the git history of this README and amounts to: trim to the sustained part,
+overlap-add the tail onto the head, two-pass `loudnorm` to −16 LUFS, encode at 128 kbps.
+
+**Licensing:** whatever track ships here needs to be one you have the right to distribute.
+Nothing else in this project carries a third-party licence — the art is original and the
+setting is generic Norse rather than any particular game's world — so the audio is the one file
+that could create an obligation. If the track is under CC-BY, credit belongs in the help
+overlay.
+
+### Choosing a track
+
+What suits this game: a calm, loopable instrumental at **70–90 BPM**, no vocals, no strong
+melodic hook. Players will hear it for twenty minutes at a stretch while concentrating, so
+anything with a memorable tune becomes irritating fast — you want texture, not a song. For the
+Norse setting, try nyckelharpa, frame drum, low strings, or soft synth pads. Aim for a **60–120
+second seamless loop** at around −16 LUFS so it sits under the effects, exported as a mono or
+low-bitrate stereo MP3 kept **under 2 MB** — mobile players in the Philippines are often on
+metered data, and a 12 MB track is a real cost to them.
+
+Where to get one, in the order I'd try:
+
+| Source | Terms | Notes |
+| --- | --- | --- |
+| [Kevin MacLeod / Incompetech](https://incompetech.com) | CC-BY, or paid to skip attribution | Large catalogue, several Nordic and folk pieces |
+| [Free Music Archive](https://freemusicarchive.org) | Per-track, mostly CC | Check each licence individually |
+| [OpenGameArt](https://opengameart.org) | CC0 / CC-BY | Written for games, so loops are usually clean |
+| [Pixabay Music](https://pixabay.com/music/) | Free for commercial use | Quality varies; audition carefully |
+| [Epidemic Sound](https://www.epidemicsound.com) or [Artlist](https://artlist.io) | Paid subscription | Worth it if the game is ever monetised |
+
+Two warnings. **YouTube's audio library is not a general licence** — those tracks are cleared
+for YouTube videos, not for embedding in a game. And under CC-BY you must credit the composer
+somewhere the player can see it; a line in the help overlay is the natural spot, and leaving it
+out is a licence breach even though nobody is likely to notice.
+
+If you'd rather ship nothing, the game is complete without music. The effects carry it.
 
 ## Progress
 
@@ -274,7 +351,8 @@ rune-fall/
 ├── js/
 │   ├── game.js             board, matching, quests, timer, warp, charges, blockers
 │   ├── lives.js            5 lives, 30-minute regen, local or server-backed
-│   ├── progress.js         quest number, zeny and charges across sessions
+│   ├── progress.js         quest number, zeny, charges and seen tips
+│   ├── music.js            optional background track, ducking and autoplay
 │   └── leaves.js           falling-leaf background, independent of the game
 ├── server/
 │   └── lives-server.example.js    optional IP-keyed lives, plain Node
@@ -285,6 +363,7 @@ rune-fall/
 │   ├── viewport.js         board sizing across device dimensions
 │   └── bot.js              shared board reader and move chooser
 ├── assets/
+│   ├── bgm.mp3             looping background track
 │   ├── favicon.svg         slime mascot, browser tab icon
 │   └── sprite-sheet.svg    reference art for docs and previews
 ├── package.json
@@ -323,6 +402,13 @@ matches; balance runs showed 2 made the blocker goal the only thing that mattere
 
 **Scoring** — `clear.size * 60 * combo` in `resolve()`, 80 per tile for a plain orb
 detonation, 100 for a rune combination, and the speed bonus in `completeQuest()`.
+
+**Combination effects** — `comboFx()` in `js/game.js` maps each combination to its sound,
+shockwave reach, spark count and screen shake. All of it is skipped under
+`prefers-reduced-motion`.
+
+**Onboarding tips** — the `TIPS` object in `js/game.js`. Add an entry, then call `tip("id")`
+wherever the player first meets that thing.
 
 **Combinations** — `comboOf()` decides which pairing was swapped and `comboCells()` builds the
 area it destroys. Both are near the bottom of `js/game.js`, next to the shared `detonate()`

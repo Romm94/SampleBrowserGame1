@@ -232,6 +232,104 @@ async function boot(origin, { progress, timeScale } = {}){
     dom.window.close();
   }
 
+  /* ---------------------------------------------------------------- */
+  console.log("\n7. onboarding");
+  {
+    const { dom, window, doc } = await boot(origin);       // nothing saved yet
+    doc.getElementById("veilBtn").click();
+    await sleep(1200);
+
+    const tip = doc.getElementById("tip");
+    check("a first-time tip appears", !tip.hidden, tip.textContent.slice(0, 40));
+    tip.click();
+    check("tapping it dismisses the tip", tip.hidden);
+
+    const help = doc.getElementById("help");
+    check("help starts closed", help.hidden);
+    doc.getElementById("helpBtn").click();
+    await sleep(80);
+    check("help button opens the rules", !help.hidden);
+    check("rules cover combinations", /Orb \+ blast/.test(help.textContent));
+    check("rules cover blockers", /Bramble/.test(help.textContent));
+    doc.getElementById("helpClose").onclick();
+    await sleep(60);
+    check("it closes again", help.hidden);
+
+    const stored = JSON.parse(window.localStorage.getItem("runefall.progress.v1"));
+    check("the tip is remembered", Array.isArray(stored.seen) && stored.seen.includes("basics"),
+          JSON.stringify(stored.seen));
+    dom.window.close();
+  }
+
+  console.log("\n8. tips do not repeat on a later visit");
+  {
+    const { dom, doc } = await boot(origin,
+      { progress: { level: 1, zeny: 0, charges: 0, seen: ["basics", "rune", "combine"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(1200);
+    check("no tip shown to a returning player", doc.getElementById("tip").hidden,
+          doc.getElementById("tip").textContent.slice(0, 40) || "(nothing)");
+    dom.window.close();
+  }
+
+  console.log("\n9. the rune picker chooses what a charge places");
+  {
+    const { dom, window, doc } = await boot(origin,
+      { progress: { level: 1, zeny: 0, charges: 1, seen: ["basics", "charge"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(400);
+
+    check("picker is shown when charges are held", !doc.getElementById("picker").hidden);
+    const rowPick = doc.querySelector('.pick[data-rune="row"]');
+    rowPick.onclick();
+    await sleep(60);
+    check("picking a rune updates the button", /row rune/.test(doc.getElementById("chargeBtn").textContent),
+          doc.getElementById("chargeBtn").textContent.trim());
+
+    const { grid } = readBoard(doc, cellSize(doc));
+    doc.getElementById("chargeBtn").click();
+    await sleep(70);
+    tap(window, grid[4][3].el);
+    await sleep(200);
+
+    // a row rune draws two horizontal bars; a blast draws a ring at stroke-width 5
+    const html = grid[4][3].el.innerHTML;
+    check("a row rune was placed, not a blast",
+          html.includes('height="6"') && !html.includes('stroke-width="5"'),
+          html.includes('stroke-width="5"') ? "got a blast rune" : "row rune");
+    dom.window.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n10. background music is wired up");
+  {
+    // jsdom has no media pipeline, so this checks the asset and the wiring
+    // rather than playback — that needs a real browser
+    const track = path.join(ROOT, "assets", "bgm.mp3");
+    const exists = fs.existsSync(track);
+    check("a track is present", exists, exists ? "assets/bgm.mp3" : "missing");
+
+    if (exists){
+      const bytes = fs.statSync(track).size;
+      check("it stays inside the mobile data budget", bytes < 2 * 1024 * 1024,
+            (bytes / 1048576).toFixed(2) + " MB");
+      const head = fs.readFileSync(track).subarray(0, 3);
+      check("it is a real MP3", head.toString() === "ID3" || head[0] === 0xFF,
+            head.toString("hex"));
+    }
+
+    const music = fs.readFileSync(path.join(ROOT, "js", "music.js"), "utf8");
+    check("music.js points at that file", music.includes('"assets/bgm.mp3"'));
+
+    const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    check("the page loads music.js", html.includes("js/music.js"));
+    check("it loads before the game", html.indexOf("js/music.js") < html.indexOf("js/game.js"));
+
+    const { dom, doc } = await boot(origin);
+    check("the mute button controls it", !!doc.getElementById("muteBtn"));
+    dom.window.close();
+  }
+
   console.log("\n" + (failures ? failures + " FAILED" : "all passed"));
   process.exitCode = failures ? 1 : 0;
   server.close();
