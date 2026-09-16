@@ -2,8 +2,8 @@
  *
  * The game keeps its state inside a closure, so the tests can't reach in. This
  * reads the board back out of the DOM instead: tile positions come from their
- * translate3d(), and a slime's colour is recoverable because its body is filled
- * with url(#gN) where N is the type index.
+ * translate3d(), and the colour and rune are published as data-type and
+ * data-special on each tile element.
  *
  * Deliberately no smarter than a decent human: one move deep, no cascade
  * planning, and it never spends rune charges. So when the bot clears a goal,
@@ -40,9 +40,8 @@ function readBoard(doc, cell){
   for (const el of doc.querySelectorAll(".tile")){
     const p = posOf(el, cell);
     if (!p || p.r < 0 || p.r >= ROWS || p.c < 0 || p.c >= COLS) continue;
-    const body = el.querySelector('path[fill^="url(#g"]');
-    const match = body && /url\(#g(\d)\)/.exec(body.getAttribute("fill"));
-    grid[p.r][p.c] = { el, type: match ? Number(match[1]) : -1 };
+    const type = el.dataset.type === undefined ? -1 : Number(el.dataset.type);
+    grid[p.r][p.c] = { el, type: Number.isFinite(type) ? type : -1, special: el.dataset.special || "" };
   }
   const blockers = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   for (const el of doc.querySelectorAll(".blocker")){

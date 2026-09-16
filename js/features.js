@@ -199,7 +199,7 @@ async function boot(origin, { progress, timeScale } = {}){
     check("found two adjacent tiles", !!a && !!b);
 
     // spend both carried charges to put a blast rune on each
-    const isBlast = el => el.innerHTML.includes('stroke-width="5"');
+    const isBlast = el => el.dataset.special === "bomb";
     for (const t of [a, b]){
       doc.getElementById("chargeBtn").click();
       await sleep(70);
@@ -292,11 +292,9 @@ async function boot(origin, { progress, timeScale } = {}){
     tap(window, grid[4][3].el);
     await sleep(200);
 
-    // a row rune draws two horizontal bars; a blast draws a ring at stroke-width 5
-    const html = grid[4][3].el.innerHTML;
     check("a row rune was placed, not a blast",
-          html.includes('height="6"') && !html.includes('stroke-width="5"'),
-          html.includes('stroke-width="5"') ? "got a blast rune" : "row rune");
+          grid[4][3].el.dataset.special === "row",
+          grid[4][3].el.dataset.special || "(no rune)");
     dom.window.close();
   }
 
@@ -328,6 +326,30 @@ async function boot(origin, { progress, timeScale } = {}){
     const { dom, doc } = await boot(origin);
     check("the mute button controls it", !!doc.getElementById("muteBtn"));
     dom.window.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n11. source sanity");
+  {
+    // two function declarations sharing a name silently clobber each other and
+    // the symptom shows up somewhere unrelated — this caught exactly that once
+    for (const file of ["game.js", "lives.js", "progress.js", "music.js", "leaves.js"]){
+      const src = fs.readFileSync(path.join(ROOT, "js", file), "utf8");
+      const names = [...src.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]);
+      const dupes = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+      check(`${file}: no duplicate function names`, dupes.length === 0, dupes.join(", ") || "none");
+    }
+
+    // every atlas cell the game asks for must have a stylesheet rule
+    const game = fs.readFileSync(path.join(ROOT, "js", "game.js"), "utf8");
+    const css  = fs.readFileSync(path.join(ROOT, "css", "styles.css"), "utf8");
+    const keys = [...game.matchAll(/key:"(\w+)"/g)].map(m => m[1]).concat(["row", "col", "bomb", "orb"]);
+    const missing = keys.filter(k => !css.includes(`.art-${k}`) && !css.includes(`.art-${k} `));
+    check("every sprite key has an atlas position", missing.length === 0, missing.join(", ") || "none");
+
+    const atlas = path.join(ROOT, "assets", "sprites.png");
+    check("the atlas ships", fs.existsSync(atlas),
+          fs.existsSync(atlas) ? (fs.statSync(atlas).size / 1024).toFixed(1) + " KB" : "missing");
   }
 
   console.log("\n" + (failures ? failures + " FAILED" : "all passed"));

@@ -112,7 +112,7 @@ body::before{
 /* ---------- board ---------- */
 .stage{display:grid; gap:10px; justify-items:center; width:100%}
 .frame{
-  position:relative; padding:10px; border-radius:18px;
+  position:relative; padding:10px 16px; border-radius:18px;
   background:linear-gradient(180deg,#3b3170,#221b45);
   border:1px solid #56489a;
   box-shadow:inset 0 2px 0 rgba(255,255,255,.14), 0 18px 45px rgba(0,0,0,.55);
@@ -230,7 +230,10 @@ body::before{
   .goal svg{width:27px; height:27px}
   .goal b{font-size:13px; min-width:40px}
 
-  .frame{padding:7px; border-radius:14px}
+  .frame{padding:7px 12px; border-radius:14px}
+  .vine{width:22px; background-size:22px 85px}
+  .vine-l{left:-11px}
+  .vine-r{right:-11px}
 
   /* overlays live inside the board frame, which is small here */
   .veil{padding:15px; overflow-y:auto}
@@ -450,16 +453,8 @@ body::before{
 .pick:focus-visible{outline:3px solid var(--teal); outline-offset:2px}
 .pick.is-on{background:linear-gradient(180deg,#4b3f8f,#372e6b); border-color:var(--gold);
             box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 0 12px rgba(233,196,106,.35)}
-.pick::before, .pick::after{content:""; position:absolute; background:#fff5d6; border-radius:2px}
-.pick[data-rune="row"]::before{left:18%; right:18%; top:42%; height:3px}
-.pick[data-rune="row"]::after {left:18%; right:18%; top:57%; height:3px}
-.pick[data-rune="col"]::before{top:18%; bottom:18%; left:42%; width:3px}
-.pick[data-rune="col"]::after {top:18%; bottom:18%; left:57%; width:3px}
-.pick[data-rune="bomb"]::before{
-  left:50%; top:50%; width:16px; height:16px; margin:-8px 0 0 -8px;
-  background:none; border:3px solid #fff5d6; border-radius:50%;
-}
-.pick[data-rune="bomb"]::after{display:none}
+.pick .art{width:78%; height:78%; margin:0 auto}
+.pick{display:flex; align-items:center; justify-content:center}
 
 /* ===================================================================
    First-time tips
@@ -491,3 +486,60 @@ body::before{
 .help-list dt{margin:0; color:var(--gold); flex:0 0 42%}
 .help-list dd{margin:0; color:#cfc6ef}
 #helpClose{margin-top:18px; width:100%}
+
+/* ===================================================================
+   Sprite atlas — assets/sprites.png, 5 columns x 2 rows
+   =================================================================== */
+.art{
+  display:block; width:100%; height:100%;
+  background-image:url("../assets/sprites.png");
+  background-size:500% 200%;
+  background-repeat:no-repeat;
+}
+.art-ember {background-position:  0%   0%}
+.art-amber {background-position: 25%   0%}
+.art-moss  {background-position: 50%   0%}
+.art-frost {background-position: 75%   0%}
+.art-wraith{background-position:100%   0%}
+.art-bone  {background-position:  0% 100%}
+.art-row   {background-position: 25% 100%}
+.art-col   {background-position: 50% 100%}
+.art-bomb  {background-position: 75% 100%}
+.art-orb   {background-position:100% 100%}
+
+.tile .art{width:94%; height:94%; margin:3%}
+.goal-art{display:block; width:32px; height:32px; flex:none}
+.legend .art{width:26px; height:26px; flex:none}
+
+/* rune marks sit over the slime so its colour is still readable underneath */
+.rune{position:absolute; inset:0; pointer-events:none}
+.rune::before, .rune::after{
+  content:""; position:absolute; background:#fffbe9; border-radius:3px;
+  box-shadow:0 0 7px #fff, 0 0 15px rgba(233,196,106,.95);
+}
+.rune-row::before{left:8%; right:8%; top:41%; height:10%}
+.rune-row::after {left:8%; right:8%; top:57%; height:10%}
+.rune-col::before{top:8%; bottom:8%; left:41%; width:10%}
+.rune-col::after {top:8%; bottom:8%; left:57%; width:10%}
+.rune-bomb::before{
+  left:26%; top:26%; width:48%; height:48%; background:none; border-radius:50%;
+  border:4px solid #fffbe9; box-shadow:0 0 8px #fff, 0 0 18px rgba(255,120,80,.95);
+}
+.rune-bomb::after{
+  left:47%; top:6%; width:6%; height:88%; border-radius:3px; opacity:.85;
+}
+
+/* ===================================================================
+   Vines down the board sides
+   =================================================================== */
+.vine{
+  position:absolute; top:-6px; bottom:-6px; width:28px; z-index:3;
+  pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2234%22%20height%3D%22132%22%20viewBox%3D%220%200%2034%20132%22%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%233f7d3a%22%20stroke-width%3D%224.5%22%20stroke-linecap%3D%22round%22%3E%20%3Cpath%20d%3D%22M17%200%20C27%2018%207%2034%2017%2050%20C27%2066%207%2082%2017%2098%20C24%20110%2014%20122%2017%20132%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%235aa84f%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20opacity%3D%22.85%22%3E%20%3Cpath%20d%3D%22M17%200%20C27%2018%207%2034%2017%2050%20C27%2066%207%2082%2017%2098%20C24%20110%2014%20122%2017%20132%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%234e9c43%22%20stroke%3D%22%232f6b2c%22%20stroke-width%3D%221.5%22%3E%20%3Cpath%20d%3D%22M22%2014%20C31%209%2033%2017%2027%2022%20C22%2026%2019%2021%2022%2014%20Z%22%2F%3E%20%3Cpath%20d%3D%22M10%2040%20C2%2034%201%2043%207%2047%20C12%2050%2014%2046%2010%2040%20Z%22%2F%3E%20%3Cpath%20d%3D%22M24%2066%20C33%2061%2035%2069%2029%2074%20C24%2078%2021%2073%2024%2066%20Z%22%2F%3E%20%3Cpath%20d%3D%22M9%2092%20C1%2086%200%2095%206%2099%20C11%20102%2013%2098%209%2092%20Z%22%2F%3E%20%3Cpath%20d%3D%22M23%20116%20C32%20111%2034%20119%2028%20124%20C23%20128%2020%20123%2023%20116%20Z%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%237fc96f%22%20opacity%3D%22.55%22%3E%20%3Cpath%20d%3D%22M23%2015%20C29%2012%2030%2017%2026%2020%20Z%22%2F%3E%20%3Cpath%20d%3D%22M9%2041%20C4%2037%203%2042%207%2045%20Z%22%2F%3E%20%3Cpath%20d%3D%22M25%2067%20C31%2064%2032%2069%2028%2072%20Z%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%23cfe9a8%22%20opacity%3D%22.9%22%3E%20%3Ccircle%20cx%3D%2227%22%20cy%3D%2230%22%20r%3D%222.4%22%2F%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2258%22%20r%3D%222.2%22%2F%3E%20%3Ccircle%20cx%3D%2228%22%20cy%3D%2284%22%20r%3D%222.3%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%22108%22%20r%3D%222%22%2F%3E%20%3C%2Fg%3E%20%3C%2Fsvg%3E");
+  background-repeat:repeat-y;
+  background-size:28px 109px;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.65));
+  opacity:.95;
+}
+.vine-l{left:-14px}
+.vine-r{right:-14px; transform:scaleX(-1)}

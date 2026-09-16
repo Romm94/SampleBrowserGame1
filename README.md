@@ -4,7 +4,7 @@ A match-3 puzzle game in the browser. Norse fantasy field, cute slime creatures,
 power-ups, timed quests and a regenerating pool of lives. No build step, no framework, no
 npm install — plain HTML, CSS and JavaScript.
 
-![Slimes and runes](assets/sprite-sheet.svg)
+![The six slimes and the four runes](assets/sprites.png)
 
 ## Run it
 
@@ -363,26 +363,38 @@ rune-fall/
 │   ├── viewport.js         board sizing across device dimensions
 │   └── bot.js              shared board reader and move chooser
 ├── assets/
+│   ├── sprites.png         tile art atlas, 5x2 cells of 128px
 │   ├── bgm.mp3             looping background track
-│   ├── favicon.svg         slime mascot, browser tab icon
-│   └── sprite-sheet.svg    reference art for docs and previews
+│   └── favicon.svg         browser tab icon
 ├── package.json
 ├── README.md
 └── .gitignore
 ```
 
-The radial gradients that colour the slimes live inline in `index.html`, inside a zero-size
-`<svg>`. They have to be inline — an SVG `url(#id)` reference can't reach into a separate
-file, and fetching one would break when you open the page with `file://`.
+Tile art comes from `assets/sprites.png`, a single 640×256 atlas of ten 128px cells — six
+slimes on the top row, four runes on the bottom. One file means one request and one decode.
+The `.art-*` rules in the stylesheet map each name to its `background-position`; `TYPES` in
+`js/game.js` holds the key and the debris colour for each slime.
 
-`assets/sprite-sheet.svg` is documentation, not a game asset. The game draws its pieces from
-`slimeMarkup()` in `js/game.js`. If you retheme, update both.
+Runes on the board are **not** the rune sprites. A rune has to keep its slime's colour, or you
+couldn't tell what it matches, so the row, column and blast marks are drawn as a glowing
+overlay on top of the slime. The rune sprites are used where colour doesn't matter: the
+legend, the rune picker and the help overlay.
+
+Each tile publishes `data-type` and `data-special`, which is how the test bot reads the board
+without reaching into the game's closure.
 
 ## Tuning
 
-**Colours and creature names** — the `TYPES` array in `js/game.js`, paired with the
-`<radialGradient>` blocks in `index.html`. Array index and gradient id have to line up:
-`TYPES[2]` uses `url(#g2)`.
+**Tile art** — replace `assets/sprites.png`, keeping the 5×2 layout and the order
+ember, amber, moss, frost, wraith, bone, row, col, bomb, orb. `TYPES` in `js/game.js` maps each
+slime to its atlas key and its spark colour; the `.art-*` rules set the positions.
+
+**Vines** — the `.vine` rules in the stylesheet. The vine is an inline SVG data URI tiled
+vertically with `background-repeat:repeat-y`, so it fits any board height without stretching.
+It sits half outside the frame in the side gutter; if you widen it, widen `.frame`'s horizontal
+padding to match and update the gutter constants in `fit()`, or the board will overflow
+sideways on small phones.
 
 **Board size** — `ROWS` and `COLS` in `js/game.js`. The CSS is driven by a `--cell` variable
 that `fit()` recalculates, so an odd board like 7×9 works without touching the stylesheet.

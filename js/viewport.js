@@ -18,8 +18,8 @@ const ROOT = path.resolve(__dirname, "..");
 const COLS = 8;
 
 const BODY_PADDING = 16;   // css: body padding each side
-const FRAME_NARROW = 7;    // css: .frame padding on phones
-const FRAME_WIDE   = 10;   // css: .frame padding on desktop
+const FRAME_NARROW = 12;   // css: .frame side padding on phones (vine gutter)
+const FRAME_WIDE   = 16;   // css: .frame side padding on desktop
 
 const DEVICES = [
   { name: "iPhone SE",        w: 375, h: 667 },

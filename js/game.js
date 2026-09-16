@@ -13,13 +13,15 @@
   const CONTINUE_SECONDS = 30;   // what a "more time" continue buys
   /* ---------------------------------------------------------------------- */
 
+  /* key matches the cell name in assets/sprites.png; spark is the colour used
+     for that slime's debris when it pops */
   const TYPES = [
-    { name:"Ember",  g:"url(#g0)", ink:"#5c0f0f" },
-    { name:"Amber",  g:"url(#g1)", ink:"#6b3400" },
-    { name:"Moss",   g:"url(#g2)", ink:"#12461f" },
-    { name:"Frost",  g:"url(#g3)", ink:"#0b3057" },
-    { name:"Wraith", g:"url(#g4)", ink:"#2c1a64" },
-    { name:"Bone",   g:"url(#g5)", ink:"#3b4149" }
+    { name:"Ember",  key:"ember",  spark:"#ff8b5c" },
+    { name:"Amber",  key:"amber",  spark:"#ffd76a" },
+    { name:"Moss",   key:"moss",   spark:"#8ff08a" },
+    { name:"Frost",  key:"frost",  spark:"#7fd2ff" },
+    { name:"Wraith", key:"wraith", spark:"#c39bff" },
+    { name:"Bone",   key:"bone",   spark:"#e6edf5" }
   ];
 
   const Lives = window.RuneLives;
@@ -78,40 +80,21 @@
   const clock = s => Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
 
   /* ---------------- artwork ---------------- */
+  const art = key => `<i class="art art-${key}"></i>`;
+
   function slimeMarkup(type, special){
-    const t = TYPES[type];
-    let rune = "";
-    if (special === "row")
-      rune = `<g fill="#fff5d6" stroke="${t.ink}" stroke-width="2.5">
-                <rect x="6" y="44" width="88" height="6" rx="3"/>
-                <rect x="6" y="56" width="88" height="6" rx="3"/></g>`;
-    if (special === "col")
-      rune = `<g fill="#fff5d6" stroke="${t.ink}" stroke-width="2.5">
-                <rect x="38" y="14" width="6" height="76" rx="3"/>
-                <rect x="56" y="14" width="6" height="76" rx="3"/></g>`;
-    if (special === "bomb")
-      rune = `<g fill="none" stroke="#fff5d6" stroke-width="5" stroke-linecap="round">
-                <circle cx="50" cy="54" r="18"/>
-                <path d="M50 26v8M50 74v8M22 54h8M70 54h8"/></g>`;
-    return `<svg viewBox="0 0 100 100" aria-hidden="true">
-      <ellipse cx="50" cy="90" rx="30" ry="6" fill="rgba(0,0,0,.35)"/>
-      <path d="M50 13c-21 0-37 20-37 44 0 18 16 31 37 31s37-13 37-31c0-24-16-44-37-44z"
-            fill="${t.g}" stroke="rgba(0,0,0,.4)" stroke-width="3"/>
-      <ellipse cx="35" cy="30" rx="11" ry="6.5" fill="rgba(255,255,255,.55)" transform="rotate(-25 35 30)"/>
-      <ellipse cx="37" cy="50" rx="5.5" ry="7.5" fill="#181418"/>
-      <ellipse cx="63" cy="50" rx="5.5" ry="7.5" fill="#181418"/>
-      <circle cx="39" cy="47" r="2.1" fill="#fff"/><circle cx="65" cy="47" r="2.1" fill="#fff"/>
-      <path d="M42 66q8 7 16 0" stroke="${t.ink}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-      ${rune}
-    </svg>`;
+    const rune = (special === "row" || special === "col" || special === "bomb")
+      ? `<b class="rune rune-${special}"></b>` : "";
+    return art(TYPES[type].key) + rune;
   }
-  const tileMarkup = t => t.special === "rainbow" ? `<div class="orb"></div>` : slimeMarkup(t.type, t.special);
+  const tileMarkup = t => t.special === "rainbow" ? art("orb") : slimeMarkup(t.type, t.special);
   const heartMarkup = full =>
     `<svg viewBox="0 0 24 24" class="${full ? "on" : "off"}" aria-hidden="true">
        <path d="M12 21s-7.4-4.6-9.3-8.9A5.2 5.2 0 0 1 12 6.7a5.2 5.2 0 0 1 9.3 5.4C19.4 16.4 12 21 12 21z"/></svg>`;
 
-  document.getElementById("lg1").outerHTML = slimeMarkup(3, "row").replace("<svg", `<svg style="width:26px;height:26px;flex:none"`);
-  document.getElementById("lg2").outerHTML = slimeMarkup(0, "bomb").replace("<svg", `<svg style="width:26px;height:26px;flex:none"`);
+  document.querySelectorAll("[data-art]").forEach(el => {
+    el.className = (el.className + " art art-" + el.dataset.art).trim();
+  });
 
   /* ---------------- sound ---------------- */
   let audio = null, muted = false;
@@ -180,9 +163,9 @@
     // board gets the height instead of sharing it
     const sideBySide = narrow && vh < 560 && vw > vh;
 
-    // gutter covers the body padding (16 each side) plus the board frame (7 each
-    // side) — leaving it out overflows sideways on a 320px phone
-    const widthCap  = vw - (narrow ? 52 : 60);
+    // gutter covers the body padding (16 each side) plus the board frame, which
+    // is wider at the sides now to make room for the vines
+    const widthCap  = vw - (narrow ? 58 : 70);
     const heightCap = sideBySide ? vh - 56
                     : narrow     ? vh * 0.48      // shares the screen with the HUD
                     :              vh - 260;
@@ -208,11 +191,20 @@
     const el = document.createElement("div");
     el.className = "tile";
     el.dataset.id = t.id;
-    el.innerHTML = tileMarkup(t);
+    dressTile(el, t);
     boardEl.appendChild(el);
     t.el = el;
     return t;
   }
+  /* named dressTile, not paint — paint() further down is the rune flash effect,
+     and two function declarations with one name silently clobber each other */
+  function dressTile(el, t){
+    el.dataset.type = t.type;
+    el.dataset.special = t.special || "";
+    el.innerHTML = tileMarkup(t);
+  }
+  const repaint = t => dressTile(t.el, t);
+
   function place(t, animate = true){
     const s = cellPx();
     const tf = `translate3d(${t.c * s}px, ${t.r * s}px, 0)`;
@@ -520,6 +512,8 @@
 
   /* every combination gets its own sound and its own shape of blast, so the
      good ones feel different rather than just scoring more */
+  const sparkColour = type => (TYPES[type] && TYPES[type].spark) || "#ffe9a8";
+
   function comboFx(kind, t){
     const gold = "#ffe9a8", teal = "#8ff0e4", rose = "#ffb4b4";
     if (kind === "cross"){
@@ -626,7 +620,7 @@
         const t = T(id);
         t.special = s.sp;
         if (s.sp === "rainbow") t.type = -1;
-        t.el.innerHTML = tileMarkup(t);
+        repaint(t);
         blip(880, .16, "sine", .2);
         tip("rune");
       }
@@ -751,15 +745,14 @@
             stroke="rgba(205,242,255,.85)" stroke-width="5"/>
       <path d="M28 34 L54 58 L38 78" stroke="rgba(235,250,255,.95)" stroke-width="6"
             fill="none" stroke-linecap="round"/></svg>`,
-    score: `<svg viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="36" fill="url(#g1)" stroke="#6b3400" stroke-width="4"/>
-      <path d="M50 27 L58 44 L77 46 L63 59 L67 78 L50 68 L33 78 L37 59 L23 46 L42 44 Z"
-            fill="rgba(255,255,255,.6)"/></svg>`
+    score: `<span class="goal-art">${art("amber")}</span>`
   };
 
   function goalRow(g, plain){
     const done = !plain && g.have >= g.need;
-    const icon = g.kind === "collect" ? slimeMarkup(g.type, null) : GOAL_ICON[g.kind];
+    const icon = g.kind === "collect"
+      ? `<span class="goal-art">${art(TYPES[g.type].key)}</span>`
+      : GOAL_ICON[g.kind];
     const num = v => g.kind === "score" ? v.toLocaleString() : v;
     const label = plain ? num(g.need) : num(Math.min(g.have, g.need)) + "/" + num(g.need);
     return `<div class="goal${done ? " done" : ""}">
@@ -851,7 +844,7 @@
     if (isLocked(t.r, t.c)){ blip(150, .1, "sawtooth", .07); return; }
     charges--;
     t.special = chargeRune;
-    t.el.innerHTML = tileMarkup(t);
+    repaint(t);
     sparks(t.r, t.c, 10, "#ffe9a8");
     t.el.classList.remove("forge"); void t.el.offsetWidth;
     t.el.classList.add("forge");
@@ -1259,7 +1252,7 @@
         const t = T(id);
         if (t.type !== ty || t.special === "rainbow") continue;
         t.special = kind === "orb-bomb" ? "bomb" : (flip++ % 2 ? "col" : "row");
-        t.el.innerHTML = tileMarkup(t);
+        repaint(t);
         clear.add(K(rr,cc));
       }
     }
