@@ -206,7 +206,7 @@ body::before{
   .lives    {grid-column:2;      order:3}
   .stage    {grid-column:1 / -1; order:4}
   .quest    {grid-column:1 / -1; order:5}
-  .charge   {grid-column:1 / -1; order:6}
+  .charge-group{grid-column:1 / -1; order:6}
   .tools    {grid-column:1 / -1; order:7}
   .legend   {display:none}      /* reference text, not needed mid-quest */
 
@@ -560,3 +560,15 @@ body::before{
 /* bramble and creeper are both vines — tint them apart at a glance */
 .blocker[data-kind="bramble"] .art{filter:drop-shadow(0 0 6px rgba(200,60,80,.75))}
 .blocker[data-kind="creeper"] .art{filter:drop-shadow(0 0 7px rgba(110,220,90,.8))}
+
+/* The rune charge button and its picker are one control. Keeping them in a
+   single grid item stops the mobile layout from putting the picker in a
+   narrow side column, which squashed the three rune icons together. */
+.charge-group{display:grid; gap:6px}
+.picker{display:flex; gap:6px}
+.pick{height:46px}
+.pick .art{width:84%; height:84%}
+@media(max-width:819px){
+  .pick{height:44px}
+  .charge-group{gap:5px}
+}

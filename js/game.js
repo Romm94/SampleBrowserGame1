@@ -99,11 +99,15 @@
   });
 
   /* ---------------- sound ---------------- */
-  let audio = null, muted = false;
+  let muted = false;
+  // one context for the whole game; iOS caps how many you may open and starts
+  // them suspended, so effects and music both go through RuneAudio
+  const actx = () => (window.RuneAudio ? RuneAudio.context() : null);
+
   function blip(freq, dur = .09, type = "triangle", vol = .16){
     if (muted) return;
     try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const audio = actx(); if (!audio) return;
       const o = audio.createOscillator(), g = audio.createGain();
       o.type = type; o.frequency.value = freq;
       g.gain.setValueAtTime(vol, audio.currentTime);
@@ -115,7 +119,7 @@
   function sweep(from, to, dur){
     if (muted) return;
     try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const audio = actx(); if (!audio) return;
       const o = audio.createOscillator(), g = audio.createGain();
       o.type = "sine";
       o.frequency.setValueAtTime(from, audio.currentTime);
@@ -132,7 +136,7 @@
   function boom(){
     if (muted) return;
     try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const audio = actx(); if (!audio) return;
       const len = Math.floor(audio.sampleRate * 0.5);
       const buf = audio.createBuffer(1, len, audio.sampleRate);
       const data = buf.getChannelData(0);
@@ -751,6 +755,43 @@
   }
 
   /* ---------------- quests ---------------- */
+  /* Obstacles run in bands of ten, so each stretch of the game has its own
+     character rather than piling everything on at once. Within a band the
+     count climbs with the quest number; past quest 50 the bands repeat with
+     the intensity of the last one. */
+  const BANDS = [
+    { from: 1,  kinds:["frost"] },
+    { from: 11, kinds:["bramble"] },
+    { from: 21, kinds:["creeper"], fast: true },
+    { from: 31, kinds:["frost","bramble"] },
+    { from: 41, kinds:["frost","creeper"], fast: true }
+  ];
+
+  function bandFor(n){
+    const wrapped = n > 50 ? ((n - 1) % 50) + 1 : n;
+    let band = BANDS[0];
+    for (const b of BANDS) if (wrapped >= b.from) band = b;
+    return { band, step: wrapped - band.from };      // 0..9 within the band
+  }
+
+  function obstaclesFor(n){
+    const { band, step } = bandFor(n);
+    const has = k => band.kinds.includes(k);
+    const ramp = (base, per, cap) => Math.min(cap, base + Math.floor(step / per));
+    const shared = band.kinds.length > 1;            // split the load when mixed
+
+    const plan = { frost: 0, frostHp: 1, bramble: 0, creeper: 0, creeperEvery: 0 };
+    if (has("frost"))   plan.frost   = ramp(shared ? 2 : 2, shared ? 4 : 3, shared ? 4 : 5);
+    if (has("bramble")) plan.bramble = ramp(1, shared ? 5 : 4, shared ? 2 : 3);
+    if (has("creeper")){
+      plan.creeper = ramp(1, 4, shared ? 2 : 3);
+      // the vine bands spread noticeably faster than the mixed band would
+      const base = band.fast ? 9000 : 15000;
+      plan.creeperEvery = Math.max(band.fast ? 5000 : 8000, base - step * 400);
+    }
+    return plan;
+  }
+
   /* Quest shapes by number:
        1–2    collect one colour on a clean board
        3+     frost appears — two chips each, clear it by matching on top of it
@@ -763,15 +804,7 @@
     /* Counts are set from test/balance.js runs: a bot that always takes the
        first legal move should come close to clearing them, so a person who
        actually aims at the blockers clears them with room to spare. */
-    const plan = {
-      frost:   n >= 3 ? Math.min(5, 2 + Math.floor((n - 3) / 3)) : 0,
-      frostHp: 1,
-      bramble: n >= 6 ? Math.min(3, 1 + Math.floor((n - 6) / 5)) : 0,
-      // the creeper arrives later and quickens with the quest number: it starts
-      // as a single shoot every 16s and tightens toward three shoots every 7s
-      creeper:      n >= 9 ? Math.min(3, 1 + Math.floor((n - 9) / 6)) : 0,
-      creeperEvery: n >= 9 ? Math.max(7000, 16000 - (n - 9) * 500) : 0
-    };
+    const plan = obstaclesFor(n);
     const blockerCount = plan.frost + plan.bramble;   // creeper is not an objective
     const isScoreQuest = n >= 5 && n % 5 === 0;
     const moves = Math.max(18, 30 - Math.floor((n - 1) / 2));
@@ -1004,6 +1037,7 @@
 
   function startLevel(n, entrance){
     stopCreeper();
+    hideTip();
     level = n;
     const q = questFor(n);
     goals = q.goals;
@@ -1248,19 +1282,37 @@
     charge:  ["Carried runes", "Spare moves became rune charges. Pick a rune below, then tap any slime to place it."]
   };
 
-  let tipTimer = null;
+  /* Tips queue rather than overwrite. Quest 1 introduces both the basics and
+     frost, and without a queue the second would replace the first before it
+     could be read — and both would be marked as seen. */
+  let tipTimer = null, tipQueue = [];
+
   function tip(id){
-    if (!TIPS[id] || seenTips.includes(id) || locked) return;
-    seenTips.push(id);
+    if (!TIPS[id] || seenTips.includes(id) || tipQueue.includes(id) || locked) return;
+    tipQueue.push(id);
+    if (tipEl.hidden) nextTip();
+  }
+
+  function nextTip(){
+    clearTimeout(tipTimer);
+    const id = tipQueue.shift();
+    if (!id){ tipEl.hidden = true; return; }
+    seenTips.push(id);                  // only marked once it is actually shown
     saveProgress();
     const [title, body] = TIPS[id];
-    tipEl.innerHTML = `<b>${title}</b>${body}<small>Tap to dismiss</small>`;
+    const more = tipQueue.length ? `<small>Tap for the next one</small>`
+                                 : `<small>Tap to dismiss</small>`;
+    tipEl.innerHTML = `<b>${title}</b>${body}${more}`;
     tipEl.hidden = false;
-    clearTimeout(tipTimer);
-    tipTimer = setTimeout(hideTip, 7000);
+    tipTimer = setTimeout(nextTip, 7000);
   }
-  function hideTip(){ clearTimeout(tipTimer); tipEl.hidden = true; }
-  tipEl.onclick = hideTip;
+
+  function hideTip(){
+    clearTimeout(tipTimer);
+    tipQueue = [];
+    tipEl.hidden = true;
+  }
+  tipEl.onclick = nextTip;              // tap moves on rather than losing the rest
 
   function openHelp(){
     hideTip();
@@ -1476,6 +1528,7 @@
   /* pointer: tap-tap or drag */
   let drag = null;
   boardEl.addEventListener("pointerdown", e => {
+    if (window.RuneAudio) RuneAudio.unlock();   // iOS keeps it suspended otherwise
     if (busy || !started || locked) return;
     const el = e.target.closest(".tile"); if (!el) return;
     const t = T(Number(el.dataset.id)); if (!t) return;

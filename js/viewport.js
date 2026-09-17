@@ -60,6 +60,9 @@ async function measure(origin, dev, useVisualViewport){
     virtualConsole: vc,
     beforeParse(window){
       window.HTMLCanvasElement.prototype.getContext = () => new Proxy({}, { get: () => () => {} });
+      // jsdom has no media pipeline; stub it so the real audio path still runs
+      window.HTMLMediaElement.prototype.play = () => Promise.resolve();
+      window.HTMLMediaElement.prototype.pause = () => {};
       try { window.localStorage.clear(); } catch (e){}
       Object.defineProperty(window, "innerWidth",  { value: dev.w, configurable: true });
       Object.defineProperty(window, "innerHeight", { value: dev.h, configurable: true });

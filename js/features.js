@@ -45,6 +45,9 @@ async function boot(origin, { progress, timeScale } = {}){
     virtualConsole: vc,
     beforeParse(window){
       window.HTMLCanvasElement.prototype.getContext = () => new Proxy({}, { get: () => () => {} });
+      // jsdom has no media pipeline; stub it so the real audio path still runs
+      window.HTMLMediaElement.prototype.play = () => Promise.resolve();
+      window.HTMLMediaElement.prototype.pause = () => {};
       try {
         window.localStorage.clear();
         if (progress) window.localStorage.setItem("runefall.progress.v1", JSON.stringify(progress));
@@ -84,7 +87,8 @@ async function boot(origin, { progress, timeScale } = {}){
   /* ---------------------------------------------------------------- */
   console.log("\n2. blockers appear and can be chipped");
   {
-    const { dom, window, doc } = await boot(origin, { progress: { level: 7, zeny: 0, charges: 0 } });
+    // quests 31-40 are the band that mixes frost and bramble
+    const { dom, window, doc } = await boot(origin, { progress: { level: 33, zeny: 0, charges: 0 } });
     doc.getElementById("veilBtn").click();
     await sleep(400);
 
@@ -101,8 +105,9 @@ async function boot(origin, { progress, timeScale } = {}){
     // a bramble cell must refuse selection
     const cell = cellSize(doc);
     const bramble = blockers.find(b => b.dataset.kind === "bramble");
-    const pos = posOf(bramble, cell);
-    const under = [...doc.querySelectorAll(".tile")].find(t => {
+    check("a bramble is on the board", !!bramble);
+    const pos = bramble ? posOf(bramble, cell) : null;
+    const under = pos && [...doc.querySelectorAll(".tile")].find(t => {
       const p = posOf(t, cell);
       return p && p.r === pos.r && p.c === pos.c;
     });
@@ -242,8 +247,17 @@ async function boot(origin, { progress, timeScale } = {}){
 
     const tip = doc.getElementById("tip");
     check("a first-time tip appears", !tip.hidden, tip.textContent.slice(0, 40));
+    check("the basics come first", /Line up three/.test(tip.textContent),
+          tip.textContent.slice(0, 30));
+
+    // quest 1 has two tips to give; tapping should advance, not discard
     tip.click();
-    check("tapping it dismisses the tip", tip.hidden);
+    await sleep(60);
+    check("tapping moves to the next tip", !tip.hidden && /Frost/.test(tip.textContent),
+          tip.textContent.slice(0, 30));
+    tip.click();
+    await sleep(60);
+    check("tapping the last one dismisses it", tip.hidden);
 
     const help = doc.getElementById("help");
     check("help starts closed", help.hidden);
@@ -265,7 +279,7 @@ async function boot(origin, { progress, timeScale } = {}){
   console.log("\n8. tips do not repeat on a later visit");
   {
     const { dom, doc } = await boot(origin,
-      { progress: { level: 1, zeny: 0, charges: 0, seen: ["basics", "rune", "combine"] } });
+      { progress: { level: 1, zeny: 0, charges: 0, seen: ["basics", "rune", "combine", "frost"] } });
     doc.getElementById("veilBtn").click();
     await sleep(1200);
     check("no tip shown to a returning player", doc.getElementById("tip").hidden,
@@ -367,8 +381,9 @@ async function boot(origin, { progress, timeScale } = {}){
   /* ---------------------------------------------------------------- */
   console.log("\n12. the creeper vine");
   {
+    // quests 21-30 are the vine band; 24 rather than 25 so it isn't a score quest
     const { dom, window, doc } = await boot(origin,
-      { progress: { level: 12, zeny: 0, charges: 0, seen: ["basics","frost","bramble","creeper"] } });
+      { progress: { level: 24, zeny: 0, charges: 0, seen: ["basics","frost","bramble","creeper"] } });
     doc.getElementById("veilBtn").click();
     await sleep(500);
 
@@ -376,12 +391,14 @@ async function boot(origin, { progress, timeScale } = {}){
     const started = creepers();
     check("vine is placed on a late quest", started > 0, started + " shoots");
 
+    // the vine is pressure, not an objective: this band sets no blocker goal at
+    // all, so the only goals should be the three collect ones
     const goalRows = [...doc.querySelectorAll("#goals .goal b")].map(b => b.textContent);
-    const blockerGoal = goalRows[goalRows.length - 1];
-    check("the blocker goal excludes the vine", /^0\/[0-9]+$/.test(blockerGoal), blockerGoal);
+    check("the vine sets no blocker goal", goalRows.length === 3,
+          goalRows.length + " goals: " + goalRows.join(" "));
 
     // it should take ground while the player sits still
-    await sleep(16500);
+    await sleep(9000);      // the vine band spreads faster than the mixed one
     const grown = creepers();
     check("it spreads when left alone", grown > started, started + " -> " + grown);
 

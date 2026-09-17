@@ -61,6 +61,9 @@ function serve(){
       window.HTMLCanvasElement.prototype.getContext = () => new Proxy({}, {
         get: () => () => {}
       });
+      // jsdom has no media pipeline; stub it so the real audio path still runs
+      window.HTMLMediaElement.prototype.play = () => Promise.resolve();
+      window.HTMLMediaElement.prototype.pause = () => {};
       window.localStorage.clear();
     }
   });

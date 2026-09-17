@@ -73,18 +73,33 @@ its cell — you can't swap that slime until something clears it, so you have to
 into it from around the outside. All blockers belong to the cell rather than the slime, so
 slimes fall through them normally and gravity is untouched.
 
-**The creeper vine** is different: it's pressure, not an objective. From quest 9 it starts as a
-single shoot and spreads to a neighbouring cell on a timer, locking whatever it covers. Cutting
-any of it resets the timer; cutting all of it stops the spread for the rest of the quest, so
-it rewards dealing with it early. It is deliberately excluded from the blocker goal — counting
-something that grows would make the target move while you chase it. It also can never take the
-last legal move: a shoot that would strangle the board is withdrawn, and it stops at 14 cells.
+**The creeper vine** is different: it's pressure, not an objective. It spreads to a
+neighbouring cell on a timer, locking whatever it covers. Cutting any of it resets the timer;
+cutting all of it stops the spread for the rest of the quest, so it rewards dealing with it
+early. It is deliberately excluded from the blocker goal — counting something that grows would
+make the target move while you chase it. It can never take the last legal move either: a shoot
+that would strangle the board is withdrawn, and it stops at 14 cells.
 
-| Quest | Shoots at start | Spreads every |
-| --- | --- | --- |
-| 9 | 1 | 16 s |
-| 15 | 2 | 13 s |
-| 25 | 3 | 8 s |
+### Obstacle bands
+
+Obstacles run in bands of ten quests, so each stretch of the game has its own character instead
+of piling everything on at once. Within a band the count climbs with the quest number. Past
+quest 50 the bands repeat.
+
+| Quests | Obstacle | At the start of the band | At the end |
+| --- | --- | --- | --- |
+| 1–10 | Frost only | 2 frost | 5 frost |
+| 11–20 | Bramble only | 1 bramble | 3 bramble |
+| 21–30 | Creeper vine, fast | 1 shoot every 9 s | 3 shoots every 5.4 s |
+| 31–40 | Frost + bramble | 2 frost, 1 bramble | 4 frost, 2 bramble |
+| 41–50 | Frost + creeper, fast | 2 frost, 1 shoot every 9 s | 4 frost, 2 shoots every 5.4 s |
+
+The mixed bands give each obstacle a smaller share so the two together aren't twice the work.
+The vine bands spread noticeably faster than a mixed band would — that's `band.fast` in
+`obstaclesFor()`.
+
+Note that the vine bands set **no blocker goal at all**, since the vine doesn't count toward
+one. Those quests are judged purely on their collect or score goal, with the vine as pressure.
 
 Goal sizes are derived from what a board can actually produce, not picked by hand — see
 [Balance](#balance).
@@ -143,6 +158,23 @@ the big blasts.
 
 Music and effects have separate toggles in the tools row, and both preferences are saved with
 your progress.
+
+### Why mobile audio is fiddly
+
+Phones, iOS in particular, impose three rules that between them stop a naive implementation
+from ever making a sound, and an earlier version of `js/music.js` broke on all three:
+
+1. `play()` must be called **inside** a user gesture. Calling it from a `canplaythrough`
+   handler that happens to fire later does not count.
+2. iOS refuses to preload media, so `canplaythrough` may never fire. Gating playback on it
+   means the track never starts — which is exactly why the music button did nothing on a phone.
+3. iOS **ignores `HTMLMediaElement.volume`**. Assigning to it does nothing, so fading and
+   ducking have to run through a Web Audio `GainNode`.
+
+The fix routes the audio element through a gain node, calls `play()` straight from the button
+handler, and never waits on a load event. Effects and music now share a single `AudioContext`
+via `window.RuneAudio`, because browsers cap how many you may open and iOS starts them
+suspended until a gesture resumes one.
 
 Background music plays from `assets/bgm.mp3`. `js/music.js` waits for both the track to load
 and the first tap before playing, since browsers block audio until the user interacts, and it
@@ -422,6 +454,9 @@ unwinnable.
 
 **Board size** — `ROWS` and `COLS` in `js/game.js`. The CSS is driven by a `--cell` variable
 that `fit()` recalculates, so an odd board like 7×9 works without touching the stylesheet.
+
+**Obstacle bands** — the `BANDS` table and `obstaclesFor()` in `js/game.js`. Each entry is a
+starting quest and the kinds it uses; `fast` shortens the vine's spread timer.
 
 **Difficulty curve** — `questFor(n)` returns the colours, goal sizes, blocker plan and move
 budget; `timeFor(q, n)` derives the clock from all of it. Change anything here and re-run
