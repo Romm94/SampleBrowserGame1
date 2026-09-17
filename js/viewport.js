@@ -63,6 +63,7 @@ async function measure(origin, dev, useVisualViewport){
       // jsdom has no media pipeline; stub it so the real audio path still runs
       window.HTMLMediaElement.prototype.play = () => Promise.resolve();
       window.HTMLMediaElement.prototype.pause = () => {};
+      window.HTMLMediaElement.prototype.load = () => {};
       try { window.localStorage.clear(); } catch (e){}
       Object.defineProperty(window, "innerWidth",  { value: dev.w, configurable: true });
       Object.defineProperty(window, "innerHeight", { value: dev.h, configurable: true });

@@ -48,6 +48,7 @@ async function boot(origin, { progress, timeScale } = {}){
       // jsdom has no media pipeline; stub it so the real audio path still runs
       window.HTMLMediaElement.prototype.play = () => Promise.resolve();
       window.HTMLMediaElement.prototype.pause = () => {};
+      window.HTMLMediaElement.prototype.load = () => {};
       try {
         window.localStorage.clear();
         if (progress) window.localStorage.setItem("runefall.progress.v1", JSON.stringify(progress));
@@ -238,7 +239,8 @@ async function boot(origin, { progress, timeScale } = {}){
       await sleep(70);
     }
 
-    check("the combination is named on screen", announced === "Twin blast",
+    // the banner names the combination, then adds the praise once the chain lands
+    check("the combination is named on screen", /Twin blast/.test(announced || ""),
           announced || "(nothing shown)");
     const after = Number(doc.getElementById("score").textContent.replace(/,/g, ""));
     // a 5x5 blast is 25 tiles at the combination rate, well above a plain match
@@ -475,6 +477,46 @@ async function boot(origin, { progress, timeScale } = {}){
     doc.getElementById("shopClose").click();
     await sleep(60);
     check("it closes again", doc.getElementById("shop").hidden);
+    dom.window.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n14. pauses, praise and stage music");
+  {
+    const { dom, window, doc } = await boot(origin,
+      { progress: { level: 4, zeny: 6000, charges: 0, seen: ["basics","frost","rune","combine"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(500);
+
+    // help must NOT stop the clock
+    const clockBefore = doc.getElementById("clock").textContent;
+    doc.getElementById("helpBtn").click();
+    await sleep(1600);
+    check("the clock keeps running while the rules are open",
+          doc.getElementById("clock").textContent !== clockBefore,
+          clockBefore + " -> " + doc.getElementById("clock").textContent);
+    doc.getElementById("helpClose").click();
+    await sleep(80);
+
+    // the shop must stop it
+    const clockShop = doc.getElementById("clock").textContent;
+    doc.getElementById("shopBtn").click();
+    await sleep(1600);
+    check("the shop holds the clock",
+          doc.getElementById("clock").textContent === clockShop,
+          clockShop + " -> " + doc.getElementById("clock").textContent);
+    doc.getElementById("shopClose").click();
+    await sleep(1400);              // the clock shows whole seconds
+    check("and it starts again on closing",
+          doc.getElementById("clock").textContent !== clockShop,
+          clockShop + " -> " + doc.getElementById("clock").textContent);
+
+    // quest 4 is in the frost band, so that's the track it asks for. Whether a
+    // missing file falls back can't be tested here — jsdom never fetches media,
+    // so no error event ever fires.
+    check("each band asks for its own track",
+          window.RuneMusic.nowPlaying() === "assets/bgm-frost.mp3",
+          window.RuneMusic.nowPlaying());
     dom.window.close();
   }
 

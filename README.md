@@ -51,32 +51,30 @@ follow the conventions players already know from other match-3 games:
 
 ### Combo praise
 
-A cascade that keeps going is praised on screen:
+A combo is everything one move destroys — the match or blast that starts it, plus every
+cascade it sets off. Counted in tiles, not in cascade depth.
 
-| Combo | Word |
+| Tiles | Word |
 | --- | --- |
-| 3–7 | Substantial |
-| 8–9 | Supreme |
-| 10–19 | Immortal |
-| 20–49 | Ascendant |
-| 50–99 | God! |
+| 12–15 | Substantial |
+| 16–30 | Supreme |
+| 31–50 | Immortal |
+| 51–75 | Ascendant |
+| 76–99 | God! |
 | 100+ | God-slayer! |
 
-**What "combo" counts is a live question, and it matters.** `PRAISE_ON` in `js/game.js`
-selects between two meanings:
+Cascade depth was the obvious metric and the wrong one: measured over 120 bot moves, the
+deepest cascade was **2**, so thresholds in the tens could never be reached. Tiles cleared
+climbs into the hundreds once orb combinations are involved, which makes the whole ladder
+usable. `PRAISE_ON` in `js/game.js` still switches back if you want the old behaviour.
 
-- `"cascade"` (the default) counts how many times the board refilled into another match —
-  the number already shown as "Combo ×2". Measured over 120 bot moves, **the deepest cascade
-  was 2**, and the ladder never reached even "Substantial". An 8×8 board with six colours
-  simply doesn't chain that far; "God-slayer!" at 100 cascades is unreachable in principle.
-- `"tiles"` counts how many slimes the whole chain destroyed. On the same 120 moves
-  "Substantial" fired 16 times, and the upper tiers become genuinely reachable because an
-  orb-plus-orb clears the entire board and an orb-plus-blast can exceed a hundred with the
-  cascades it sets off.
+Each tier has its own sound, in `PRAISE_SFX`. The ladder climbs one musical step at a time
+rather than simply getting louder — a bare fifth, a triad, the triad an octave up, the full
+octave stack, then drums underneath — all in the same key so two tiers firing in one chain
+don't clash. The top two tiers also shake the board and throw sparks.
 
-If you want the whole ladder to be seen, switch to `"tiles"` and raise the bottom threshold —
-at 3 tiles "Substantial" fires on nearly every cascade, so something like 15 would carry more
-weight. Left on `"cascade"`, the top four words are decoration that no player will ever see.
+When a rune combination starts the chain, the banner keeps its name and adds the praise to it:
+*Twin blast · Immortal ×34*. The name says what you did, the praise says how big it got.
 
 Each combination is named on screen as it fires. Two runes sitting next to each other always
 count as a legal move even when they'd make no match, so the board won't declare itself stuck
@@ -184,9 +182,17 @@ board at once, frost, bramble, a score quest, carried charges — a short tip ap
 board and never appears again. Which tips have been seen is stored with progress, so it
 survives a refresh and resets with "start over".
 
-The **?** button opens the full rules at any time, and pauses the stage clock while it's open.
-This matters on phones, where the side legend is hidden for space: without it the combination
-rules would be unreachable on mobile.
+The **?** button opens the full rules at any time. This matters on phones, where the side
+legend is hidden for space: without it the combination rules would be unreachable on mobile.
+
+**The clock keeps running while the rules are open.** Checking the FAQ mid-quest costs you
+time, which is the point — the rules are there to be read before you need them. The creeper
+does stop spreading, though: losing board to an obstacle while reading is a punishment out of
+proportion to the mistake.
+
+The shop is the opposite: it pauses both the clock and the vine, because deciding what to buy
+shouldn't be a race. That does mean a player can pause indefinitely by opening the shop. It's a
+deliberate trade — if it gets abused, restricting the shop to between quests is the fix.
 
 ## Zeny
 
@@ -256,6 +262,22 @@ The fix routes the audio element through a gain node, calls `play()` straight fr
 handler, and never waits on a load event. Effects and music now share a single `AudioContext`
 via `window.RuneAudio`, because browsers cap how many you may open and iOS starts them
 suspended until a gesture resumes one.
+
+### Music per band
+
+Each obstacle band can have its own track. Drop any of these in and it's used; leave it out and
+that band keeps the default. Nothing breaks either way, and only `bgm.mp3` is required.
+
+| File | Bands |
+| --- | --- |
+| `assets/bgm.mp3` | required; the fallback for everything |
+| `assets/bgm-frost.mp3` | 1–10 |
+| `assets/bgm-bramble.mp3` | 11–20 |
+| `assets/bgm-vine.mp3` | 21–30 and 41–50 |
+| `assets/bgm-mixed.mp3` | 31–40 |
+
+Tracks change at the start of a quest with a short fade down and back up. A file that 404s is
+noted once and never requested again, so a half-finished set costs nothing.
 
 Background music plays from `assets/bgm.mp3`. `js/music.js` waits for both the track to load
 and the first tap before playing, since browsers block audio until the user interacts, and it

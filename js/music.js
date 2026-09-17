@@ -42,12 +42,24 @@ window.RuneAudio = (() => {
 window.RuneMusic = (() => {
   "use strict";
 
-  const TRACK   = "assets/bgm.mp3";
+  const TRACK   = "assets/bgm.mp3";      // always present; the fallback for everything
   const VOLUME  = 0.32;
   const FADE_MS = 900;
+  const SWAP_MS = 700;                   // fade out, change track, fade back in
+
+  /* Optional per-band tracks. Drop any of these in and they're used; leave them
+     out and that band simply keeps the default. Nothing breaks either way. */
+  const STAGE_TRACKS = {
+    frost:   "assets/bgm-frost.mp3",
+    bramble: "assets/bgm-bramble.mp3",
+    vine:    "assets/bgm-vine.mp3",
+    mixed:   "assets/bgm-mixed.mp3"
+  };
 
   let el = null, gain = null, routed = false;
   let muted = false, playing = false, duckTimer = null, failed = false;
+  let current = TRACK, swapping = false;
+  const missing = new Set();             // tracks we already know aren't there
 
   function init(){
     el = new Audio();
@@ -58,7 +70,17 @@ window.RuneMusic = (() => {
     el.setAttribute("playsinline", "");      // iOS: don't hand it to the video player
     el.volume = 1;                           // real level is set on the gain node
 
-    el.addEventListener("error", () => { failed = true; });
+    el.addEventListener("error", () => {
+      // a missing per-band track falls back to the default rather than dying
+      if (current !== TRACK){
+        missing.add(current);
+        current = TRACK;
+        el.src = TRACK;
+        if (playing) play();
+        return;
+      }
+      failed = true;
+    });
 
     // first touch anywhere is our chance to start
     const wake = () => {
@@ -133,6 +155,28 @@ window.RuneMusic = (() => {
         start();
       }
     },
+
+    /* Called when a quest starts. name is a key of STAGE_TRACKS, or anything
+       else for the default. Silent no-op if that track is already playing or
+       has already been found missing. */
+    setStage(name){
+      if (!el || failed || swapping) return;
+      const wanted = STAGE_TRACKS[name] && !missing.has(STAGE_TRACKS[name])
+        ? STAGE_TRACKS[name] : TRACK;
+      if (wanted === current) return;
+
+      swapping = true;
+      const resume = playing && !muted;
+      setLevel(0, SWAP_MS * 0.45);
+      setTimeout(() => {
+        current = wanted;
+        try { el.src = wanted; el.load(); } catch (e){}
+        if (resume){ if (play()) setLevel(VOLUME, SWAP_MS * 0.55); }
+        swapping = false;
+      }, SWAP_MS * 0.45);
+    },
+
+    nowPlaying: () => current,
 
     duck(ms = 1200){
       if (!el || muted || !playing) return;

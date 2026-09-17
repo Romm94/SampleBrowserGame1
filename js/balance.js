@@ -38,6 +38,7 @@ async function runQuest(origin, level, smart){
       // jsdom has no media pipeline; stub it so the real audio path still runs
       window.HTMLMediaElement.prototype.play = () => Promise.resolve();
       window.HTMLMediaElement.prototype.pause = () => {};
+      window.HTMLMediaElement.prototype.load = () => {};
       try {
         window.localStorage.clear();
         window.localStorage.setItem("runefall.progress.v1",

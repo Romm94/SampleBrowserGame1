@@ -657,7 +657,7 @@
 
   /* ---------------- resolving ---------------- */
   async function resolve(prefer){
-    let combo = 0, chainTiles = 0;
+    let combo = 0;
     while (true){
       const groups = findGroups();
       if (!groups.length) break;
@@ -677,13 +677,7 @@
       const gained = clear.size * PAY_TILE * combo;
       addScore(gained);
       blip(420 + combo * 90, .1, "triangle");
-      chainTiles += clear.size;
-      if (combo > 1){
-        const measure = PRAISE_ON === "tiles" ? chainTiles : combo;
-        const word = praiseFor(measure);
-        if (word) comboEl.dataset.praise = word; else delete comboEl.dataset.praise;
-        announce(word ? `${word} ×${combo}` : "Combo ×" + combo, word ? 1500 : 700);
-      }
+      noteChain(clear.size, combo);
       if (clear.size){
         const first = parse([...clear][0]);
         floatPts(first[0], first[1], "+" + gained);
@@ -784,6 +778,9 @@
     { from: 31, kinds:["frost","bramble"] },
     { from: 41, kinds:["frost","creeper"], fast: true }
   ];
+
+  // which music each obstacle band asks for; see STAGE_TRACKS in js/music.js
+  const BAND_MUSIC = ["frost", "bramble", "vine", "mixed", "vine"];
 
   function bandFor(n){
     const wrapped = n > 50 ? ((n - 1) % 50) + 1 : n;
@@ -1074,6 +1071,10 @@
     selected = null;
     disarm();
     startTimer(q.seconds);
+    if (window.RuneMusic){
+      const idx = BANDS.indexOf(bandFor(n).band);
+      RuneMusic.setStage(BAND_MUSIC[idx] || "");
+    }
     busy = false;
     saveProgress();
     scheduleHint();
@@ -1413,16 +1414,18 @@
   document.getElementById("shopBtn").onclick = () => shopEl.hidden ? openShop() : closeShop();
   document.getElementById("shopClose").onclick = closeShop;
 
+  /* The clock keeps running while the rules are open — checking the FAQ mid-quest
+     costs you time, which is the point. The vine stops, because losing board to a
+     spreading obstacle while reading is a punishment out of proportion. */
   function openHelp(){
     hideTip();
     helpEl.hidden = false;
-    pauseTimer();                       // reading the rules shouldn't cost time
-    clearTimeout(creeperTimer);         // nor board
+    clearTimeout(creeperTimer);
     creeperTimer = null;
   }
   function closeHelp(){
     helpEl.hidden = true;
-    if (started && !locked && !busy && veil.hidden){ resumeTimer(); armCreeper(); }
+    if (started && !locked && !busy && veil.hidden) armCreeper();
   }
   document.getElementById("helpBtn").onclick = () => helpEl.hidden ? openHelp() : closeHelp();
   document.getElementById("helpClose").onclick = closeHelp;
@@ -1519,25 +1522,85 @@
        "tiles"   — how many slimes the whole chain destroyed. Reaches into the
                    hundreds with orb combinations, so the full ladder is usable.
      See the README for the measurements behind this. */
-  const PRAISE_ON = "cascade";
+  const PRAISE_ON = "tiles";
 
   const PRAISE = [
     { at: 100, word: "God-slayer!" },
-    { at:  50, word: "God!" },
-    { at:  20, word: "Ascendant" },
-    { at:  10, word: "Immortal" },
-    { at:   8, word: "Supreme" },
-    { at:   3, word: "Substantial" }
+    { at:  76, word: "God!" },
+    { at:  51, word: "Ascendant" },
+    { at:  31, word: "Immortal" },
+    { at:  16, word: "Supreme" },
+    { at:  12, word: "Substantial" }
   ];
   const praiseFor = n => (PRAISE.find(p => n >= p.at) || {}).word || null;
 
-  function announce(text, hold = 700){
+  /* Each tier has to sound bigger than the one below it, and the ladder has to
+     survive being heard hundreds of times. So it climbs one musical step at a
+     time rather than getting louder: a bare fifth, then a triad, then the triad
+     an octave up, then the octave stack, then drums under it. Same key
+     throughout (C), so consecutive tiers in one chain don't clash. */
+  const PRAISE_SFX = {
+    "Substantial": () => chord([523, 784], .26, "triangle", .13),
+    "Supreme":     () => chord([523, 659, 784], .3, "triangle", .14),
+    "Immortal":    () => { chord([659, 784, 1047], .34, "sine", .14);
+                           sweep(700, 1500, .35); },
+    "Ascendant":   () => { chord([523, 659, 784, 1047], .42, "sine", .15);
+                           sweep(500, 2000, .5); },
+    "God!":        () => { boom();
+                           chord([262, 392, 523, 659, 784], .6, "sine", .16); },
+    "God-slayer!": () => { boom();
+                           setTimeout(boom, 160);
+                           chord([131, 262, 392, 523, 659, 784, 1047], .9, "sine", .17);
+                           sweep(300, 2600, .8); }
+  };
+
+  function praiseFx(word){
+    const play = PRAISE_SFX[word];
+    if (play) play();
+    if (window.RuneMusic) RuneMusic.duck(word === "God-slayer!" ? 2400 : 1300);
+    // the two top tiers earn a shake and a burst of their own
+    if (word === "God!" || word === "God-slayer!"){
+      shake(true);
+      const c = (COLS - 1) / 2, r = (ROWS - 1) / 2;
+      sparks(Math.round(r), Math.round(c), word === "God-slayer!" ? 52 : 34, "#ffe9a8");
+      shockwave(Math.round(r), Math.round(c), word === "God-slayer!" ? 16 : 11);
+    } else if (word === "Ascendant"){
+      shake(false);
+    }
+  }
+
+  function announce(text, hold = 700, force = false){
     const now = performance.now();
-    if (now < announceUntil) return;
+    if (now < announceUntil && !force) return;   // force: the praise went up a tier
     announceUntil = now + hold;
     comboEl.textContent = text;
     comboEl.classList.remove("show"); void comboEl.offsetWidth;
     comboEl.classList.add("show");
+  }
+
+  /* A "combo" is everything one move destroys: the blast that starts it plus
+     every cascade it sets off. Tracked here rather than inside resolve() so a
+     rune combination, which never enters the cascade loop, still counts. */
+  let chainTiles = 0, chainWord = null, chainCombo = null;
+
+  function resetChain(){ chainTiles = 0; chainWord = null; chainCombo = null; }
+
+  function noteChain(tiles, combo){
+    chainTiles += tiles;
+    const measure = PRAISE_ON === "tiles" ? chainTiles : combo;
+    const word = praiseFor(measure);
+    if (word && word !== chainWord){
+      chainWord = word;
+      comboEl.dataset.praise = word;
+      // keep the combination's name if one started this chain — it says what you
+      // did, where the praise only says how big it got
+      const lead = chainCombo ? `${chainCombo} · ` : "";
+      announce(`${lead}${word} ×${chainTiles}`, 1600, true);
+      praiseFx(word);
+    } else if (!word && combo > 1){
+      delete comboEl.dataset.praise;
+      announce("Combo ×" + combo, 700);
+    }
   }
 
   /* pop, score, chip blockers, drop — shared by every detonation */
@@ -1558,6 +1621,7 @@
       t.el.classList.add("pop");
     }
     if (chipped) addScore(chipped * PAY_CHIP);
+    noteChain(clear.size, 1);
     refreshGoals();
 
     await sleep(260);
@@ -1578,6 +1642,7 @@
     markSelected(null);
     blip(300, .06, "square", .1);
 
+    resetChain();
     swapCells(a,b);
     syncPositions(true);
     await sleep(230);
@@ -1587,7 +1652,8 @@
     const rainbow = [ta,tb].find(t => t && t.special === "rainbow");
 
     if (kind){
-      announce(COMBO_NAME[kind], 1800);
+      chainCombo = COMBO_NAME[kind];
+      announce(chainCombo, 1800);
       const clear = comboCells(kind, ta, tb);
       // the two runes' own effects are already folded into the combo area, so
       // clear them to stop expandSpecials firing them a second time

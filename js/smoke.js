@@ -64,6 +64,7 @@ function serve(){
       // jsdom has no media pipeline; stub it so the real audio path still runs
       window.HTMLMediaElement.prototype.play = () => Promise.resolve();
       window.HTMLMediaElement.prototype.pause = () => {};
+      window.HTMLMediaElement.prototype.load = () => {};
       window.localStorage.clear();
     }
   });
