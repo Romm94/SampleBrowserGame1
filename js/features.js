@@ -520,6 +520,28 @@ async function boot(origin, { progress, timeScale } = {}){
     dom.window.close();
   }
 
+  /* ---------------------------------------------------------------- */
+  console.log("\n15. sound effect clips");
+  {
+    const dir = path.join(ROOT, "assets", "sfx");
+    const want = ["praise-substantial","praise-supreme","praise-immortal",
+                  "praise-ascendant","praise-god","praise-godslayer",
+                  "blocker-frost","blocker-bramble","blocker-creeper"];
+    const present = want.filter(n => fs.existsSync(path.join(dir, n + ".mp3")));
+    check("every clip ships", present.length === want.length,
+          present.length + "/" + want.length);
+
+    const total = present.reduce((s,n) => s + fs.statSync(path.join(dir,n+".mp3")).size, 0);
+    check("the set stays small", total < 400 * 1024, (total/1024).toFixed(0) + " KB");
+
+    const game = fs.readFileSync(path.join(ROOT,"js","game.js"), "utf8");
+    check("the game references each one", want.every(n => game.includes(n)));
+    check("a synthesised fallback is kept", /PRAISE_SFX\[word\]/.test(game));
+
+    const music = fs.readFileSync(path.join(ROOT,"js","music.js"), "utf8");
+    check("clips go through the shared context", /createBufferSource/.test(music));
+  }
+
   console.log("\n" + (failures ? failures + " FAILED" : "all passed"));
   process.exitCode = failures ? 1 : 0;
   server.close();

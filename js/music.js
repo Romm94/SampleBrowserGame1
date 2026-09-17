@@ -28,13 +28,59 @@ window.RuneAudio = (() => {
     return ctx;
   }
 
+  /* A tiny sampler for one-shot sound effects. Decoded buffers rather than
+     <audio> elements: they can overlap, they fire with no latency, and they go
+     through the same context as everything else. A file that won't load is
+     remembered as absent so the game falls back to its synthesised sound. */
+  const buffers = new Map();     // name -> AudioBuffer, or null when unavailable
+  const sources = new Map();     // name -> url, pending decode
+
+  async function decode(name){
+    const c = context();
+    const url = sources.get(name);
+    if (!c || !url) return null;
+    sources.delete(name);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.status);
+      const buf = await c.decodeAudioData(await res.arrayBuffer());
+      buffers.set(name, buf);
+      return buf;
+    } catch (e){
+      buffers.set(name, null);   // absent; never asked for again
+      return null;
+    }
+  }
+
   return {
     context,
+
     /* call from inside a user gesture */
     unlock(){
       const c = context();
       if (c && c.state === "suspended") c.resume().catch(() => {});
+      if (c) sources.forEach((_, name) => decode(name));   // warm them once
       return c;
+    },
+
+    /* register clips; nothing is fetched until the first gesture */
+    samples(map){ Object.keys(map).forEach(k => { if (!buffers.has(k)) sources.set(k, map[k]); }); },
+
+    /* returns false if the clip isn't ready, so the caller can fall back */
+    play(name, volume = 1){
+      const c = context();
+      if (!c) return false;
+      const buf = buffers.get(name);
+      if (buf === undefined){ decode(name); return false; }
+      if (!buf) return false;
+      try {
+        const src = c.createBufferSource(), g = c.createGain();
+        src.buffer = buf;
+        g.gain.value = volume;
+        src.connect(g).connect(c.destination);
+        src.start();
+        return true;
+      } catch (e){ return false; }
     }
   };
 })();

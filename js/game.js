@@ -183,6 +183,29 @@
     saveSettings();
   };
 
+  /* Recorded clips, with the synthesised versions kept as a fallback. Nothing
+     is fetched until the first tap, and a file that won't load just means the
+     synth plays instead. */
+  const SFX_FILES = {
+    "praise-substantial": "assets/sfx/praise-substantial.mp3",
+    "praise-supreme":     "assets/sfx/praise-supreme.mp3",
+    "praise-immortal":    "assets/sfx/praise-immortal.mp3",
+    "praise-ascendant":   "assets/sfx/praise-ascendant.mp3",
+    "praise-god":         "assets/sfx/praise-god.mp3",
+    "praise-godslayer":   "assets/sfx/praise-godslayer.mp3",
+    "blocker-frost":      "assets/sfx/blocker-frost.mp3",
+    "blocker-bramble":    "assets/sfx/blocker-bramble.mp3",
+    "blocker-creeper":    "assets/sfx/blocker-creeper.mp3"
+  };
+  const PRAISE_SAMPLE = {
+    "Substantial":"praise-substantial", "Supreme":"praise-supreme",
+    "Immortal":"praise-immortal",       "Ascendant":"praise-ascendant",
+    "God!":"praise-god",                "God-slayer!":"praise-godslayer"
+  };
+  const sample = (name, vol = 1) =>
+    !muted && window.RuneAudio && RuneAudio.play(name, vol);
+
+  if (window.RuneAudio) RuneAudio.samples(SFX_FILES);
   if (window.RuneMusic) RuneMusic.init();
 
   /* ---------------- sizing ---------------- */
@@ -328,7 +351,8 @@
     b.hp--;
     if (b.hp <= 0) blockers[r][c] = null;
     drawBlocker(r,c);
-    blip(b.hp <= 0 ? 620 : 380, .1, "square", .13);
+    if (!sample("blocker-" + b.kind, b.hp <= 0 ? 1 : .7))
+      blip(b.hp <= 0 ? 620 : 380, .1, "square", .13);
     if (b.kind === "creeper") creeperCleared();
     return b.kind !== "creeper";
   }
@@ -1555,8 +1579,11 @@
   };
 
   function praiseFx(word){
-    const play = PRAISE_SFX[word];
-    if (play) play();
+    // recorded clip first; the synthesised ladder covers a missing file
+    if (!sample(PRAISE_SAMPLE[word])){
+      const play = PRAISE_SFX[word];
+      if (play) play();
+    }
     if (window.RuneMusic) RuneMusic.duck(word === "God-slayer!" ? 2400 : 1300);
     // the two top tiers earn a shake and a burst of their own
     if (word === "God!" || word === "God-slayer!"){

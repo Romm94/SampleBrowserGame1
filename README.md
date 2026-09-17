@@ -68,7 +68,17 @@ deepest cascade was **2**, so thresholds in the tens could never be reached. Til
 climbs into the hundreds once orb combinations are involved, which makes the whole ladder
 usable. `PRAISE_ON` in `js/game.js` still switches back if you want the old behaviour.
 
-Each tier has its own sound, in `PRAISE_SFX`. The ladder climbs one musical step at a time
+Each tier has its own recorded clip in `assets/sfx/`, played through the shared audio context
+as a decoded buffer so clips can overlap with no latency. If a file won't load, the
+synthesised ladder in `PRAISE_SFX` plays instead — the game never goes quiet because an asset
+is missing.
+
+The clips were processed before use: leading silence trimmed (some had up to 1.2 s of it,
+which would have fired the sound noticeably after the event), tails capped and faded, and each
+one normalised to a deliberate ladder so the tiers escalate. The raw set arrived spanning
+15 dB with "God!" as the *quietest* of the six.
+
+The synthesised fallback ladder climbs one musical step at a time
 rather than simply getting louder — a bare fifth, a triad, the triad an octave up, the full
 octave stack, then drums underneath — all in the same key so two tiers firing in one chain
 don't clash. The top two tiers also shake the board and throw sparks.
@@ -262,6 +272,12 @@ The fix routes the audio element through a gain node, calls `play()` straight fr
 handler, and never waits on a load event. Effects and music now share a single `AudioContext`
 via `window.RuneAudio`, because browsers cap how many you may open and iOS starts them
 suspended until a gesture resumes one.
+
+### Obstacle sounds
+
+`blocker-frost`, `blocker-bramble` and `blocker-creeper` fire when one is chipped, quieter
+when it survives the hit than when it breaks. They sit at −20 LUFS, below the praise ladder,
+because they fire many times a quest and anything louder becomes wearing.
 
 ### Music per band
 
