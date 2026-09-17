@@ -111,6 +111,21 @@ const server = http.createServer((req, res) => {
   if (path === "/lives" && req.method === "GET")          return send(shape(load(key)));
   if (path === "/lives/spend" && req.method === "POST")   return send(spend(key));
 
+  /* The shop's "buy a life" button lands here. As written it hands out lives to
+     anyone who asks, which is fine for a local demo and useless in production —
+     the server has to be the one holding the zeny balance and deducting it, or
+     a player can mint lives with a single curl. Wire it to a real balance
+     before this goes anywhere public. */
+  if (path === "/lives/grant" && req.method === "POST"){
+    const s = load(key);
+    if (s.lives < MAX){
+      s.lives++;
+      if (s.lives >= MAX) s.nextAt = null;
+      store.set(key, s);
+    }
+    return send(shape(s));
+  }
+
   // Remove this route before deploying, or anyone can refill their own lives.
   if (path === "/lives/restore" && req.method === "POST"){
     store.set(key, { lives: MAX, nextAt: null });

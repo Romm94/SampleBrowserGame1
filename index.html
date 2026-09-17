@@ -56,6 +56,7 @@
     <div class="tools">
       <button class="btn" id="hintBtn">Show a move</button>
       <button class="btn" id="restartBtn">Give up</button>
+      <button class="btn" id="shopBtn">Shop</button>
       <button class="btn mute" id="helpBtn" title="How to play" aria-label="How to play">?</button>
       <button class="btn mute" id="sfxBtn" title="Sound effects on or off" aria-label="Sound effects on or off">🔊</button>
       <button class="btn mute" id="bgmBtn" title="Music on or off" aria-label="Music on or off">♪</button>
@@ -78,6 +79,15 @@
       <div class="board" id="board" role="grid" aria-label="Slime board"><div class="blockers" id="blockers"></div></div>
       <div class="combo" id="combo"></div>
       <div class="tip" id="tip" hidden aria-live="polite"></div>
+
+      <div class="veil shop" id="shop" hidden>
+        <div class="help-scroll">
+          <h2>Zeny shop</h2>
+          <p class="shop-purse">Purse <b id="shopPurse">0</b></p>
+          <div class="shop-list" id="shopList"></div>
+          <button class="btn gold" id="shopClose">Back to the quest</button>
+        </div>
+      </div>
 
       <div class="veil help" id="help" hidden>
         <div class="help-scroll">

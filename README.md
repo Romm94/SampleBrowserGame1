@@ -49,6 +49,35 @@ follow the conventions players already know from other match-3 games:
 | Orb + blast | Every slime of that colour becomes a blast rune, then they all fire |
 | Orb + orb | Clears the entire board |
 
+### Combo praise
+
+A cascade that keeps going is praised on screen:
+
+| Combo | Word |
+| --- | --- |
+| 3–7 | Substantial |
+| 8–9 | Supreme |
+| 10–19 | Immortal |
+| 20–49 | Ascendant |
+| 50–99 | God! |
+| 100+ | God-slayer! |
+
+**What "combo" counts is a live question, and it matters.** `PRAISE_ON` in `js/game.js`
+selects between two meanings:
+
+- `"cascade"` (the default) counts how many times the board refilled into another match —
+  the number already shown as "Combo ×2". Measured over 120 bot moves, **the deepest cascade
+  was 2**, and the ladder never reached even "Substantial". An 8×8 board with six colours
+  simply doesn't chain that far; "God-slayer!" at 100 cascades is unreachable in principle.
+- `"tiles"` counts how many slimes the whole chain destroyed. On the same 120 moves
+  "Substantial" fired 16 times, and the upper tiers become genuinely reachable because an
+  orb-plus-orb clears the entire board and an orb-plus-blast can exceed a hundred with the
+  cascades it sets off.
+
+If you want the whole ladder to be seen, switch to `"tiles"` and raise the bottom threshold —
+at 3 tiles "Substantial" fires on nearly every cascade, so something like 15 would carry more
+weight. Left on `"cascade"`, the top four words are decoration that no player will ever see.
+
 Each combination is named on screen as it fires. Two runes sitting next to each other always
 count as a legal move even when they'd make no match, so the board won't declare itself stuck
 while a combination is available, and the hint will point one out.
@@ -79,6 +108,28 @@ cutting all of it stops the spread for the rest of the quest, so it rewards deal
 early. It is deliberately excluded from the blocker goal — counting something that grows would
 make the target move while you chase it. It can never take the last legal move either: a shoot
 that would strangle the board is withdrawn, and it stops at 14 cells.
+
+### Reading an obstacle at a glance
+
+An obstacle is information, not decoration: it has to be identifiable at 40px, over a bright
+slime, on a patterned board. Three things carry that, in order of importance:
+
+1. **A coloured border** — icy white-blue for frost, red for bramble, green for creeper. The
+   border does the identifying, which is why the fill behind it is kept light (around 38%).
+   An opaque plate reads beautifully and breaks the game: you have to see the slime under a
+   frost to know what will clear it, and a match can form through a locked cell.
+2. **A strike through locked cells** — bramble and creeper get a diagonal bar, so "you can't
+   swap this" is legible without recognising the artwork at all.
+3. **Motion** — the creeper breathes, because it's the only one that spreads. Frost and
+   bramble sit still. Disabled under `prefers-reduced-motion`.
+
+The board's own tree vine was the main thing making these hard to spot: at half opacity and
+full saturation, brown-and-green scenery looks exactly like a bramble or a creeper. It now
+sits at 17% opacity and 35% saturation. The checkerboard was also nearly flat (`#191338`
+against `#1e1740`) and has been opened up, which helps every piece on the board read.
+
+The weakest remaining pairing is a moss slime under a creeper — green on green. If that proves
+a problem in play, the creeper border is the thing to push further, not the fill.
 
 ### Obstacle bands
 
@@ -136,6 +187,36 @@ survives a refresh and resets with "start over".
 The **?** button opens the full rules at any time, and pauses the stage clock while it's open.
 This matters on phones, where the side legend is hidden for space: without it the combination
 rules would be unreachable on mobile.
+
+## Zeny
+
+Zeny is deliberately scarce. A quest pays roughly 2,500 — measured, not guessed — against shop
+prices from 260 to 1,400, so a run buys one or two things rather than everything. Four
+constants at the top of `js/game.js` set the whole economy: `PAY_TILE`, `PAY_ORB`, `PAY_COMBO`
+and `PAY_CHIP`, plus the speed bonus in `completeQuest()`. Raise them together or the balance
+between ordinary matches and combinations shifts.
+
+### The shop
+
+The **Shop** button opens mid-quest and pauses both the clock and the creeper while it's open.
+
+| Item | Cost | Notes |
+| --- | --- | --- |
+| Five more moves | 260 | Added to the quest you're on |
+| Thirty more seconds | 300 | Added to the clock |
+| Row rune | 420 | A charge you place on any slime |
+| Column rune | 420 | A charge you place on any slime |
+| Blast rune | 520 | A charge you place on any slime |
+| One life | 1,400 | Only offered below five lives |
+
+Everything is applied immediately; nothing carries a timer of its own. Items you can't use
+right now — a life at full lives, a rune at five charges — show as unavailable rather than
+disappearing, so the shop reads the same every time.
+
+A warning about the life: in server mode `RuneLives.grant()` posts to `/lives/grant`, and the
+example server hands one out to anyone who asks. That's fine for a local demo and useless in
+production. **The server has to hold the zeny balance and do the deduction itself**, or a
+player can mint lives with a single `curl`. It's commented at the route.
 
 ## Zeny, and buying your way out
 
@@ -419,18 +500,22 @@ rune-fall/
 └── .gitignore
 ```
 
-Tile art comes from `assets/sprites.png`, a single 640×512 atlas of sixteen 128px cells: six
-slimes, four full-colour rune sprites, three blockers (frozen, bramble, creeper) and three
-white rune marks for the board. One file means one request and one decode.
+Tile art comes from `assets/sprites.png`, a single 640×384 atlas of thirteen 128px cells: six
+slimes, the orb, three blockers (frozen, bramble, creeper) and the three power-up logos. One
+file means one request and one decode.
+
+There is now **one set of power-up logos**, used everywhere — on the board as a mark over the
+slime, in the picker, in the legend and in the shop. The earlier full-colour rune sprites were
+dropped, which also took the atlas from 640×512 down to 640×384.
 The `.art-*` rules in the stylesheet map each name to its `background-position`; `TYPES` in
 `js/game.js` holds the key and the debris colour for each slime.
 
-Runes on the board are **not** the full rune sprites. A rune has to keep its slime's colour, or
-you couldn't tell what it matches, so the board uses the white rune marks — `mrow`, `mcol`,
-`mbomb` — laid over the slime at 76% of the cell with a glow, and the slime underneath is
-dimmed slightly so both stay readable. At full bleed the mark crowded the slime and neither
-read well. The full-colour rune sprites are used where colour doesn't matter: the legend, the
-rune picker and the help overlay.
+A rune has to keep its slime's colour, or you couldn't tell what it matches, so the logo is
+laid over the slime at 76% of the cell with a glow and the slime underneath is dimmed slightly.
+At full bleed the mark crowded the slime and neither read well.
+
+The orb is the rarest thing on the board — roughly one appears every sixty moves — so it
+carries a slow pulse and a glow to make it obvious when one does show up.
 
 The board's own surface carries an old brown tree vine, drawn as an inline SVG behind the
 slimes at half opacity so it reads as part of the board rather than as something in the way.

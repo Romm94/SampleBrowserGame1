@@ -12,6 +12,14 @@
   const CONTINUE_MOVES   = 5;    // what a "more moves" continue buys
   const CONTINUE_SECONDS = 30;   // what a "more time" continue buys
   const CREEPER_CAP      = 14;   // the vine never takes more of the board than this
+
+  /* Zeny is scarce on purpose: a quest pays enough to matter but not enough to
+     buy freely, which is what gives the shop and the continue price weight.
+     Everything earned runs through these four numbers. */
+  const PAY_TILE   = 12;   // per tile in an ordinary match, times the cascade
+  const PAY_ORB    = 16;   // per tile when an orb detonates a colour
+  const PAY_COMBO  = 20;   // per tile in a rune combination
+  const PAY_CHIP   = 8;    // per blocker chipped
   /* ---------------------------------------------------------------------- */
 
   /* key matches the cell name in assets/sprites.png; spark is the colour used
@@ -44,6 +52,9 @@
   const pickerEl = document.getElementById("picker");
   const tipEl    = document.getElementById("tip");
   const helpEl   = document.getElementById("help");
+  const shopEl   = document.getElementById("shop");
+  const shopList = document.getElementById("shopList");
+  const shopPurse= document.getElementById("shopPurse");
   const frameEl  = document.querySelector(".frame");
   const warpEl   = document.getElementById("warp");
   const warpBody = document.getElementById("warpBody");
@@ -86,7 +97,7 @@
 
   function slimeMarkup(type, special){
     const rune = (special === "row" || special === "col" || special === "bomb")
-      ? `<b class="rune rune-${special}"></b>` : "";
+      ? `<b class="rune">${art(special)}</b>` : "";
     return art(TYPES[type].key) + rune;
   }
   const tileMarkup = t => t.special === "rainbow" ? art("orb") : slimeMarkup(t.type, t.special);
@@ -223,7 +234,8 @@
      and two function declarations with one name silently clobber each other */
   function dressTile(el, t){
     el.dataset.type = t.type;
-    el.dataset.special = t.special || "";
+    if (t.special) el.dataset.special = t.special;
+    else delete el.dataset.special;     // an empty value still matches [data-special]
     el.innerHTML = tileMarkup(t);
   }
   const repaint = t => dressTile(t.el, t);
@@ -645,7 +657,7 @@
 
   /* ---------------- resolving ---------------- */
   async function resolve(prefer){
-    let combo = 0;
+    let combo = 0, chainTiles = 0;
     while (true){
       const groups = findGroups();
       if (!groups.length) break;
@@ -662,10 +674,16 @@
       for (const s of spawns) clear.delete(s.pos);
       if (!clear.size && !spawns.length) break;
 
-      const gained = clear.size * 60 * combo;
+      const gained = clear.size * PAY_TILE * combo;
       addScore(gained);
       blip(420 + combo * 90, .1, "triangle");
-      if (combo > 1) announce("Combo ×" + combo);
+      chainTiles += clear.size;
+      if (combo > 1){
+        const measure = PRAISE_ON === "tiles" ? chainTiles : combo;
+        const word = praiseFor(measure);
+        if (word) comboEl.dataset.praise = word; else delete comboEl.dataset.praise;
+        announce(word ? `${word} ×${combo}` : "Combo ×" + combo, word ? 1500 : 700);
+      }
       if (clear.size){
         const first = parse([...clear][0]);
         floatPts(first[0], first[1], "+" + gained);
@@ -681,7 +699,7 @@
         if (goal && goal.have < goal.need) goal.have++;
         t.el.classList.add("pop");
       }
-      if (chipped) addScore(chipped * 40);
+      if (chipped) addScore(chipped * PAY_CHIP);
       refreshGoals();
 
       await sleep(250);
@@ -835,7 +853,7 @@
      shows a bot that aims at objectives but plans no cascades averages roughly
      300 zeny a move, so 220 leaves headroom for an unlucky board. */
   function scoreTargetFor(moves){
-    return Math.round(moves * 220 / 100) * 100;
+    return Math.round(moves * 45 / 10) * 10;
   }
 
   // more to do means more time, but every quest tightens the belt a little
@@ -1109,7 +1127,7 @@
     const remain = Math.floor(timeLeft);
     const ratio = timeTotal ? timeLeft / timeTotal : 0;
     const tier = speedTier(ratio);
-    const timeBonus = Math.round(remain * (18 + level * 4) * tier.mult);
+    const timeBonus = Math.round(remain * (4 + level) * tier.mult);
 
     const earned = movesLeft > 0
       ? Math.max(1, Math.floor(movesLeft / MOVES_PER_CHARGE))
@@ -1314,6 +1332,87 @@
   }
   tipEl.onclick = nextTip;              // tap moves on rather than losing the rest
 
+  /* ---------------- zeny shop ----------------
+     The sink that makes a scarce currency mean something. Everything here is
+     bought mid-quest and applied immediately; nothing carries a subscription
+     or a timer of its own. */
+  const SHOP = [
+    { id:"moves", name:"Five more moves", cost:260, art:null, coin:"+5",
+      blurb:"Added to the quest you're on.",
+      can: () => started && !locked,
+      buy: () => { movesLeft += 5; movesEl.textContent = movesLeft; movesEl.classList.remove("low"); } },
+
+    { id:"time", name:"Thirty more seconds", cost:300, art:null, coin:"+30",
+      blurb:"Added to the clock straight away.",
+      can: () => started && !locked && timeTotal > 0,
+      buy: () => { timeLeft += 30; timeTotal += 30; renderTimer(); } },
+
+    { id:"row", name:"Row rune", cost:420, art:"row",
+      blurb:"A charge you place on any slime.",
+      can: () => charges < MAX_CHARGES,
+      buy: () => { charges++; renderCharges(); } },
+
+    { id:"col", name:"Column rune", cost:420, art:"col",
+      blurb:"A charge you place on any slime.",
+      can: () => charges < MAX_CHARGES,
+      buy: () => { charges++; renderCharges(); } },
+
+    { id:"bomb", name:"Blast rune", cost:520, art:"bomb",
+      blurb:"A charge you place on any slime.",
+      can: () => charges < MAX_CHARGES,
+      buy: () => { charges++; renderCharges(); } },
+
+    { id:"life", name:"One life", cost:1400, art:null, coin:"♥",
+      blurb:"Only when you're below five.",
+      can: () => Lives.get().lives < Lives.MAX,
+      buy: () => { Lives.grant(1); } }
+  ];
+
+  function drawShop(){
+    shopPurse.textContent = score.toLocaleString();
+    shopList.innerHTML = SHOP.map(item => {
+      const afford = score >= item.cost;
+      const allowed = item.can();
+      const icon = item.art ? `<i class="art art-${item.art}"></i>`
+                            : `<span class="coin">${item.coin}</span>`;
+      const why = !allowed ? "Not now" : !afford ? "Too dear" : item.cost.toLocaleString();
+      return `<div class="shop-item" data-id="${item.id}">
+        ${icon}
+        <div><h4>${item.name}</h4><p>${item.blurb}</p></div>
+        <button class="shop-buy" data-buy="${item.id}" ${afford && allowed ? "" : "disabled"}>${why}</button>
+      </div>`;
+    }).join("");
+  }
+
+  shopList.addEventListener("click", e => {
+    const btn = e.target.closest("[data-buy]");
+    if (!btn || btn.disabled) return;
+    const item = SHOP.find(i => i.id === btn.dataset.buy);
+    if (!item || score < item.cost || !item.can()) return;
+    addScore(-item.cost);
+    item.buy();
+    saveProgress();
+    refreshGoals();
+    blip(880, .18, "sine", .2);
+    const card = shopList.querySelector(`.shop-item[data-id="${item.id}"]`);
+    if (card){ card.classList.remove("bought"); void card.offsetWidth; card.classList.add("bought"); }
+    drawShop();
+  });
+
+  function openShop(){
+    hideTip();
+    drawShop();
+    shopEl.hidden = false;
+    pauseTimer();
+    clearTimeout(creeperTimer); creeperTimer = null;
+  }
+  function closeShop(){
+    shopEl.hidden = true;
+    if (started && !locked && !busy && veil.hidden){ resumeTimer(); armCreeper(); }
+  }
+  document.getElementById("shopBtn").onclick = () => shopEl.hidden ? openShop() : closeShop();
+  document.getElementById("shopClose").onclick = closeShop;
+
   function openHelp(){
     hideTip();
     helpEl.hidden = false;
@@ -1328,7 +1427,9 @@
   document.getElementById("helpBtn").onclick = () => helpEl.hidden ? openHelp() : closeHelp();
   document.getElementById("helpClose").onclick = closeHelp;
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && !helpEl.hidden) closeHelp();
+    if (e.key !== "Escape") return;
+    if (!helpEl.hidden) closeHelp();
+    else if (!shopEl.hidden) closeShop();
   });
 
   /* ---------------- rune combinations ----------------
@@ -1410,6 +1511,26 @@
      overwrite it within a few hundred milliseconds. hold keeps the banner until
      it has had its moment; anything arriving inside that window is dropped. */
   let announceUntil = 0;
+  /* Praise thresholds, as specified.
+     PRAISE_ON decides what is being counted:
+       "cascade" — how many times the board refilled into another match. This is
+                   what "Combo x2" has always meant here, but measured play tops
+                   out around 2-3, so only the first tiers ever fire.
+       "tiles"   — how many slimes the whole chain destroyed. Reaches into the
+                   hundreds with orb combinations, so the full ladder is usable.
+     See the README for the measurements behind this. */
+  const PRAISE_ON = "cascade";
+
+  const PRAISE = [
+    { at: 100, word: "God-slayer!" },
+    { at:  50, word: "God!" },
+    { at:  20, word: "Ascendant" },
+    { at:  10, word: "Immortal" },
+    { at:   8, word: "Supreme" },
+    { at:   3, word: "Substantial" }
+  ];
+  const praiseFor = n => (PRAISE.find(p => n >= p.at) || {}).word || null;
+
   function announce(text, hold = 700){
     const now = performance.now();
     if (now < announceUntil) return;
@@ -1436,7 +1557,7 @@
       if (goal && goal.have < goal.need) goal.have++;
       t.el.classList.add("pop");
     }
-    if (chipped) addScore(chipped * 40);
+    if (chipped) addScore(chipped * PAY_CHIP);
     refreshGoals();
 
     await sleep(260);
@@ -1477,7 +1598,7 @@
       }
       spendMove();
       comboFx(kind, tb);
-      await detonate(clear, 100, tb);
+      await detonate(clear, PAY_COMBO, tb);
       await resolve(null);
 
     } else if (rainbow){
@@ -1492,7 +1613,7 @@
       rainbow.special = null;
       spendMove();
       blip(1100, .3, "sine", .22);
-      await detonate(clear, 80, rainbow);
+      await detonate(clear, PAY_ORB, rainbow);
       await resolve(null);
 
     } else if (findRuns().length){

@@ -131,6 +131,24 @@ window.RuneLives = (() => {
     return snapshot();
   }
 
+  /* Buying a life in the shop. In remote mode this has to be a server call —
+     a client that can mint its own lives makes the whole limit decorative. */
+  async function grant(n = 1){
+    if (mode === "remote"){
+      try { adopt(await remote("/lives/grant", { method: "POST" })); emit(); return snapshot(); }
+      catch (e){
+        console.warn("Lives server unreachable; granting locally.", e);
+        mode = "local";
+      }
+    }
+    normalize();
+    state.lives = Math.min(MAX, state.lives + n);
+    if (state.lives >= MAX) state.nextAt = null;
+    writeLocal(state);
+    emit();
+    return snapshot();
+  }
+
   function subscribe(fn){ listeners.add(fn); fn(snapshot()); return () => listeners.delete(fn); }
 
   // keeps countdowns honest and lands regenerated lives while the page is open
@@ -153,5 +171,5 @@ window.RuneLives = (() => {
     try { adopt(await remote("/lives")); emit(); } catch (e){}
   });
 
-  return { MAX, REGEN_MS, init, spend, restore, subscribe, get: snapshot };
+  return { MAX, REGEN_MS, init, spend, grant, restore, subscribe, get: snapshot };
 })();

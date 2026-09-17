@@ -122,7 +122,7 @@ body::before{
   width:calc(var(--cell) * 8); height:calc(var(--cell) * 8);
   border-radius:10px; overflow:hidden;
   background:
-    repeating-conic-gradient(#191338 0% 25%, #1e1740 0% 50%) 0 0 / calc(var(--cell)*2) calc(var(--cell)*2);
+    repeating-conic-gradient(#171130 0% 25%, #241c4c 0% 50%) 0 0 / calc(var(--cell)*2) calc(var(--cell)*2);
   touch-action:none;
 }
 .tile{
@@ -380,8 +380,6 @@ body::before{
   animation:blockerIn .3s ease-out backwards;
 }
 .blocker svg{width:100%; height:100%; display:block}
-.blocker[data-kind="frost"]{filter:drop-shadow(0 0 7px rgba(140,210,255,.45))}
-.blocker[data-kind="bramble"]{filter:drop-shadow(0 0 6px rgba(70,100,35,.7))}
 @keyframes blockerIn{from{opacity:0; transform:scale(.6)}}
 .blocker.shatter{animation:shatter .34s ease-in forwards}
 @keyframes shatter{
@@ -490,7 +488,7 @@ body::before{
 .art{
   display:block; width:100%; height:100%;
   background-image:url("../assets/sprites.png");
-  background-size:500% 400%;
+  background-size:500% 300%;
   background-repeat:no-repeat;
 }
 .art-ember   {background-position:      0%       0%}
@@ -498,17 +496,14 @@ body::before{
 .art-moss    {background-position:     50%       0%}
 .art-frost   {background-position:     75%       0%}
 .art-wraith  {background-position:    100%       0%}
-.art-bone    {background-position:      0%  33.333%}
-.art-row     {background-position:     25%  33.333%}
-.art-col     {background-position:     50%  33.333%}
-.art-bomb    {background-position:     75%  33.333%}
-.art-orb     {background-position:    100%  33.333%}
-.art-frozen  {background-position:      0%  66.667%}
-.art-bramble {background-position:     25%  66.667%}
-.art-creeper {background-position:     50%  66.667%}
-.art-mrow    {background-position:      0%     100%}
-.art-mcol    {background-position:     25%     100%}
-.art-mbomb   {background-position:     50%     100%}
+.art-bone    {background-position:      0%      50%}
+.art-orb     {background-position:     25%      50%}
+.art-frozen  {background-position:     50%      50%}
+.art-bramble {background-position:     75%      50%}
+.art-creeper {background-position:    100%      50%}
+.art-row     {background-position:      0%     100%}
+.art-col     {background-position:     25%     100%}
+.art-bomb    {background-position:     50%     100%}
 
 .tile .art{width:94%; height:94%; margin:3%}
 .goal-art{display:block; width:32px; height:32px; flex:none}
@@ -524,7 +519,7 @@ body::before{
          drop-shadow(0 0 13px rgba(233,196,106,.8));
 }
 .rune .art{width:100%; height:100%}
-.tile[data-special] .art:first-child{filter:saturate(.85) brightness(.82)}
+.tile[data-special]:not([data-special=""]) .art:first-child{filter:saturate(.85) brightness(.82)}
 
 
 /* ===================================================================
@@ -537,8 +532,11 @@ body::before{
   background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%234a2f1c%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%2230%22%3E%20%3Cpath%20d%3D%22M-30%20640%20C%20120%20620%20190%20520%20300%20470%20C%20410%20420%20470%20330%20600%20300%20C%20700%20276%20760%20210%20840%20190%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%236b452a%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%2222%22%3E%20%3Cpath%20d%3D%22M-30%20640%20C%20120%20620%20190%20520%20300%20470%20C%20410%20420%20470%20330%20600%20300%20C%20700%20276%20760%20210%20840%20190%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%238a5c36%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%228%22%20opacity%3D%22.75%22%3E%20%3Cpath%20d%3D%22M-20%20634%20C%20130%20612%20196%20514%20306%20464%20C%20416%20414%20476%20324%20606%20294%20C%20706%20270%20764%20204%20840%20184%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%235c3a22%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%2213%22%3E%20%3Cpath%20d%3D%22M170%20560%20C%20150%20500%20190%20452%20250%20430%22%2F%3E%20%3Cpath%20d%3D%22M360%20430%20C%20372%20366%20340%20322%20286%20300%22%2F%3E%20%3Cpath%20d%3D%22M520%20344%20C%20545%20288%20520%20240%20470%20220%22%2F%3E%20%3Cpath%20d%3D%22M660%20268%20C%20690%20320%20672%20372%20620%20396%22%2F%3E%20%3Cpath%20d%3D%22M100%20628%20C%2060%20570%2078%20512%20130%20486%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%235c3a22%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%227%22%20opacity%3D%22.9%22%3E%20%3Cpath%20d%3D%22M250%20430%20C%20268%20404%20262%20380%20240%20366%22%2F%3E%20%3Cpath%20d%3D%22M286%20300%20C%20258%20288%20240%20300%20232%20320%22%2F%3E%20%3Cpath%20d%3D%22M470%20220%20C%20452%20196%20428%20196%20412%20210%22%2F%3E%20%3Cpath%20d%3D%22M620%20396%20C%20606%20420%20612%20442%20632%20452%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%233f6b32%22%20opacity%3D%22.85%22%3E%20%3Cpath%20d%3D%22M246%20358%20C%20224%20340%20228%20312%20252%20316%20C%20272%20320%20272%20350%20246%20358%20Z%22%2F%3E%20%3Cpath%20d%3D%22M230%20322%20C%20206%20330%20186%20316%20200%20298%20C%20212%20283%20238%20298%20230%20322%20Z%22%2F%3E%20%3Cpath%20d%3D%22M412%20212%20C%20392%20194%20398%20168%20420%20174%20C%20438%20179%20436%20206%20412%20212%20Z%22%2F%3E%20%3Cpath%20d%3D%22M634%20454%20C%20656%20470%20650%20496%20628%20490%20C%20610%20485%20612%20460%20634%20454%20Z%22%2F%3E%20%3Cpath%20d%3D%22M132%20484%20C%20110%20470%20114%20444%20136%20448%20C%20154%20452%20154%20478%20132%20484%20Z%22%2F%3E%20%3Cpath%20d%3D%22M556%20306%20C%20578%20292%20600%20306%20588%20324%20C%20577%20340%20550%20328%20556%20306%20Z%22%2F%3E%20%3Cpath%20d%3D%22M336%20452%20C%20314%20466%20292%20452%20304%20434%20C%20315%20418%20342%20430%20336%20452%20Z%22%2F%3E%20%3C%2Fg%3E%20%3Cg%20fill%3D%22%23548a42%22%20opacity%3D%22.6%22%3E%20%3Cpath%20d%3D%22M248%20356%20C%20234%20344%20236%20326%20250%20328%20Z%22%2F%3E%20%3Cpath%20d%3D%22M414%20210%20C%20402%20198%20406%20182%20418%20184%20Z%22%2F%3E%20%3Cpath%20d%3D%22M630%20452%20C%20644%20462%20641%20478%20628%20476%20Z%22%2F%3E%20%3C%2Fg%3E%20%3C%2Fsvg%3E");
   background-size:100% 100%;
   background-repeat:no-repeat;
-  opacity:.5;
-  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));
+  /* Kept faint and drained of colour on purpose: at half opacity and full
+     saturation this brown-and-green vine read as an obstacle, which is exactly
+     what the bramble and creeper look like. It is scenery, so it recedes. */
+  opacity:.17;
+  filter:saturate(.35) drop-shadow(0 2px 3px rgba(0,0,0,.6));
 }
 .tile, .blockers{position:absolute}
 .tile{z-index:1}
@@ -571,4 +569,113 @@ body::before{
 @media(max-width:819px){
   .pick{height:44px}
   .charge-group{gap:5px}
+}
+
+/* The orb is the rarest thing on the board — give it a pulse so it's noticed */
+.tile[data-special="rainbow"] .art{
+  animation:orbPulse 1.7s ease-in-out infinite;
+  filter:drop-shadow(0 0 7px rgba(255,255,255,.9)) drop-shadow(0 0 16px rgba(180,140,255,.85));
+}
+@keyframes orbPulse{50%{transform:scale(1.07)}}
+
+/* the praise words climb in weight as the cascade deepens */
+.combo[data-praise]{letter-spacing:.04em}
+.combo[data-praise="Immortal"]  {color:#9fe6ff; text-shadow:0 0 20px rgba(120,210,255,.9)}
+.combo[data-praise="Ascendant"] {color:#c7a6ff; text-shadow:0 0 22px rgba(170,120,255,.95)}
+.combo[data-praise="God!"]      {color:#ffd76a; text-shadow:0 0 26px rgba(255,200,80,1)}
+.combo[data-praise="God-slayer!"]{color:#ff8b7a; text-shadow:0 0 30px rgba(255,90,60,1)}
+
+/* ===================================================================
+   Zeny shop
+   =================================================================== */
+.shop-purse{margin:0 0 12px !important; font-size:14px; color:#bdb3e6}
+.shop-purse b{color:var(--gold); font-size:20px; font-variant-numeric:tabular-nums}
+.shop-list{display:grid; gap:9px}
+.shop-item{
+  display:grid; grid-template-columns:42px 1fr auto; gap:11px; align-items:center;
+  background:linear-gradient(180deg,#332b60,#241e49);
+  border:1px solid #4a3f80; border-radius:11px; padding:9px 11px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1);
+}
+.shop-item .art{width:38px; height:38px}
+.shop-item .coin{
+  width:38px; height:38px; border-radius:50%; display:grid; place-items:center;
+  background:radial-gradient(circle at 35% 30%, #ffe89a, #c68a26);
+  color:#4a3208; font-weight:800; font-size:17px; border:2px solid #f2dda1;
+}
+.shop-item h4{margin:0; font-size:14.5px; color:var(--parch); font-weight:700}
+.shop-item p{margin:1px 0 0 !important; font-size:12px; color:#9b91c4; line-height:1.35}
+.shop-buy{
+  cursor:pointer; font-family:inherit; font-weight:700; font-size:13px; white-space:nowrap;
+  color:#3a2a08; background:linear-gradient(180deg,#e9c46a,#c69a3e);
+  border:1px solid #f2dda1; border-radius:9px; padding:8px 11px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 #7d5c1f;
+}
+.shop-buy:active{transform:translateY(2px); box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 1px 0 #7d5c1f}
+.shop-buy:disabled{
+  background:linear-gradient(180deg,#463a80,#322a5e); color:#8d85b5;
+  border-color:#5a4d97; box-shadow:none; cursor:default; transform:none;
+}
+.shop-item.bought{animation:bought .5s ease-out}
+@keyframes bought{40%{transform:scale(1.03); box-shadow:0 0 18px rgba(233,196,106,.6)}}
+
+/* ===================================================================
+   Obstacle legibility
+   A blocker is information, not decoration: it has to be identifiable at a
+   glance at 40px, on top of a bright slime, on a patterned board. Each kind
+   gets its own tinted plate, its own edge colour and its own behaviour.
+   =================================================================== */
+.blocker::before{
+  /* The border and the strike carry the identification; the fill stays light
+     so the slime underneath is still readable — you have to match it to clear
+     a frost, and a match can form through a locked cell. */
+  content:""; position:absolute; inset:5%;
+  border-radius:13px; border:3px solid;
+  pointer-events:none;
+}
+.blocker .art{position:relative; z-index:1}
+
+/* frost — cold plate, hard bright edge, still */
+.blocker[data-kind="frost"]::before{
+  background:linear-gradient(160deg, rgba(58,132,205,.30), rgba(18,52,102,.38));
+  border-color:rgba(190,238,255,.95);
+  box-shadow:inset 0 0 16px rgba(180,232,255,.55), 0 0 12px rgba(120,200,255,.5);
+}
+.blocker[data-kind="frost"] .art{filter:drop-shadow(0 0 5px rgba(200,240,255,.95))}
+
+/* bramble — dark red plate and a red edge, so it never reads as the creeper */
+.blocker[data-kind="bramble"]::before{
+  background:linear-gradient(160deg, rgba(96,20,34,.38), rgba(44,10,18,.44));
+  border-color:rgba(238,96,118,.95);
+  box-shadow:inset 0 0 16px rgba(190,50,75,.5), 0 0 12px rgba(200,50,70,.5);
+}
+.blocker[data-kind="bramble"] .art{filter:drop-shadow(0 0 5px rgba(255,120,140,.9))}
+
+/* creeper — green plate, and it breathes, because it is the one that spreads */
+.blocker[data-kind="creeper"]::before{
+  background:linear-gradient(160deg, rgba(38,104,34,.36), rgba(12,44,14,.42));
+  border-color:rgba(138,240,118,.95);
+  box-shadow:inset 0 0 16px rgba(90,210,80,.5), 0 0 14px rgba(90,220,80,.55);
+  animation:creeperBreathe 2.4s ease-in-out infinite;
+}
+.blocker[data-kind="creeper"] .art{filter:drop-shadow(0 0 6px rgba(150,255,130,.95))}
+@keyframes creeperBreathe{
+  50%{box-shadow:inset 0 0 20px rgba(90,210,80,.75), 0 0 22px rgba(110,240,95,.85)}
+}
+
+/* a locked cell is struck through, so "you can't swap this" is readable
+   without having to recognise the artwork at all */
+.blocker[data-kind="bramble"]::after,
+.blocker[data-kind="creeper"]::after{
+  content:""; position:absolute; left:14%; right:14%; top:50%; height:3px;
+  border-radius:3px; background:rgba(255,255,255,.75);
+  transform:rotate(-38deg); opacity:.5; z-index:2;
+}
+
+/* a half-cleared frost fades its plate too, so progress is visible */
+.blocker[data-kind="frost"] .art.is-chipped{opacity:.55}
+.blocker[data-kind="frost"]:has(.is-chipped)::before{opacity:.55}
+
+@media(prefers-reduced-motion:reduce){
+  .blocker[data-kind="creeper"]::before{animation:none}
 }
