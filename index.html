@@ -40,7 +40,8 @@
     </div>
 
     <div class="tablet quest">
-      <h2 id="questTitle">Quest 1</h2>
+      <h2 id="questTitle">Snowy Days</h2>
+      <p class="stage-line" id="questStage">Stage 1 · 1 of 10</p>
       <div id="goals"></div>
     </div>
 
@@ -57,6 +58,7 @@
       <button class="btn" id="hintBtn">Show a move</button>
       <button class="btn" id="restartBtn">Give up</button>
       <button class="btn" id="shopBtn">Shop</button>
+      <button class="btn" id="mapBtn">Map</button>
       <button class="btn mute" id="helpBtn" title="How to play" aria-label="How to play">?</button>
       <button class="btn mute" id="sfxBtn" title="Sound effects on or off" aria-label="Sound effects on or off">🔊</button>
       <button class="btn mute" id="bgmBtn" title="Music on or off" aria-label="Music on or off">♪</button>
@@ -79,6 +81,15 @@
       <div class="board" id="board" role="grid" aria-label="Slime board"><div class="blockers" id="blockers"></div></div>
       <div class="combo" id="combo"></div>
       <div class="tip" id="tip" hidden aria-live="polite"></div>
+
+      <div class="veil shop" id="map" hidden>
+        <div class="help-scroll">
+          <h2>The road ahead</h2>
+          <p class="shop-purse">Nine regions, ten stages each. After Svartalheim the road loops.</p>
+          <div class="map-list" id="mapList"></div>
+          <button class="btn gold" id="mapClose">Back to the quest</button>
+        </div>
+      </div>
 
       <div class="veil shop" id="shop" hidden>
         <div class="help-scroll">

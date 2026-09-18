@@ -68,7 +68,7 @@ function matchesOn(grid){
 }
 
 // kinds that freeze their cell — the game rejects a swap involving one
-const LOCKED = new Set(["bramble", "creeper"]);
+const LOCKED = new Set(["bramble", "creeper", "sandpit"]);
 
 /* prefers the swap that chips the most blockers; ties go to the bigger match */
 function chooseMove(doc, cell){

@@ -511,12 +511,18 @@ async function boot(origin, { progress, timeScale } = {}){
           doc.getElementById("clock").textContent !== clockShop,
           clockShop + " -> " + doc.getElementById("clock").textContent);
 
-    // quest 4 is in the frost band, so that's the track it asks for. Whether a
-    // missing file falls back can't be tested here — jsdom never fetches media,
-    // so no error event ever fires.
-    check("each band asks for its own track",
-          window.RuneMusic.nowPlaying() === "assets/bgm-frost.mp3",
+    // Only bgm.mp3 ships, so every region falls back to it. That fallback is the
+    // contract worth testing: a half-finished music set must cost nothing.
+    check("a region with no track of its own falls back",
+          window.RuneMusic.nowPlaying() === "assets/bgm.mp3",
           window.RuneMusic.nowPlaying());
+
+    const music = fs.readFileSync(path.join(ROOT, "js", "music.js"), "utf8");
+    const regions = ["frost","bramble","vine","alps","plains",
+                     "desert","oasis","labyrinth","svartalheim"];
+    check("every region has a track slot waiting",
+          regions.every(r => music.includes(`bgm-${r}.mp3`)),
+          regions.filter(r => !music.includes(`bgm-${r}.mp3`)).join(", ") || "all nine");
     dom.window.close();
   }
 
@@ -540,6 +546,77 @@ async function boot(origin, { progress, timeScale } = {}){
 
     const music = fs.readFileSync(path.join(ROOT,"js","music.js"), "utf8");
     check("clips go through the shared context", /createBufferSource/.test(music));
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n16. regions and the map");
+  {
+    const { dom, doc } = await boot(origin,
+      { progress: { level: 34, zeny: 0, charges: 0, seen: ["basics","frost","bramble"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(500);
+
+    check("the region is named", doc.getElementById("questTitle").textContent === "Tricky Alps",
+          doc.getElementById("questTitle").textContent);
+    check("the stage is shown", /Stage 34/.test(doc.getElementById("questStage").textContent),
+          doc.getElementById("questStage").textContent);
+
+    doc.getElementById("mapBtn").click();
+    await sleep(80);
+    check("the map opens", !doc.getElementById("map").hidden);
+    check("it lists all nine regions", doc.querySelectorAll(".map-region").length === 9,
+          doc.querySelectorAll(".map-region").length + " regions");
+    check("the current region is marked", !!doc.querySelector(".map-region.is-here .map-head h4"),
+          (doc.querySelector(".map-region.is-here h4") || {}).textContent);
+    check("earlier regions read as done", doc.querySelectorAll(".map-region.is-done").length === 3,
+          doc.querySelectorAll(".map-region.is-done").length + " done");
+    check("the desert is named", /Endless Desert/.test(doc.getElementById("mapList").textContent));
+    check("Svartalheim is named", /Svartalheim/.test(doc.getElementById("mapList").textContent));
+    doc.getElementById("mapClose").click();
+    await sleep(60);
+    check("the map closes", doc.getElementById("map").hidden);
+    dom.window.close();
+  }
+
+  console.log("\n17. the sand pit takes a held rune");
+  {
+    const { dom, window, doc } = await boot(origin,
+      { progress: { level: 60, zeny: 0, charges: 2,
+                    seen: ["basics","frost","charge","sandpit"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(500);
+
+    const pits = doc.querySelectorAll('.blocker[data-kind="sandpit"]').length;
+    check("the desert places sand pits", pits > 0, pits + " pits");
+    check("frost is here too", doc.querySelectorAll('.blocker[data-kind="frost"]').length > 0);
+    check("no vines in the desert",
+          doc.querySelectorAll('.blocker[data-kind="creeper"]').length === 0);
+
+    check("two charges carried in", /×2/.test(doc.getElementById("chargeBtn").textContent),
+          doc.getElementById("chargeBtn").textContent.trim());
+
+    // sit on them and the sand should take one. Poll rather than sleep the full
+    // interval so the suite doesn't spend 17 seconds waiting for the common case.
+    let swallowed = false;
+    for (let i = 0; i < 90 && !swallowed; i++){
+      await sleep(200);
+      swallowed = /×1/.test(doc.getElementById("chargeBtn").textContent);
+    }
+    check("a held charge is swallowed", swallowed,
+          doc.getElementById("chargeBtn").textContent.trim());
+    check("the player is told", /sand/i.test(doc.getElementById("combo").textContent),
+          doc.getElementById("combo").textContent || "(nothing shown)");
+    dom.window.close();
+  }
+
+  console.log("\n18. the next stage waits for you");
+  {
+    const { doc } = await boot(origin, { progress: { level: 2, zeny: 0, charges: 0 } });
+    const game = fs.readFileSync(path.join(ROOT, "js", "game.js"), "utf8");
+    check("the warp card carries a continue button", game.includes('id="warpGo"'));
+    check("and the warp waits on it", /querySelector\("#warpGo"\)/.test(game));
+    check("charges per clear are capped", /CHARGES_PER_QUEST\s*=\s*2/.test(game));
+    check("and the ceiling is lower", /MAX_CHARGES\s*=\s*3/.test(game));
   }
 
   console.log("\n" + (failures ? failures + " FAILED" : "all passed"));

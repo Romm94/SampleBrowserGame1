@@ -139,29 +139,40 @@ against `#1e1740`) and has been opened up, which helps every piece on the board 
 The weakest remaining pairing is a moss slime under a creeper — green on green. If that proves
 a problem in play, the creeper border is the thing to push further, not the fill.
 
-### Obstacle bands
+### Regions
 
-Obstacles run in bands of ten quests, so each stretch of the game has its own character instead
-of piling everything on at once. Within a band the count climbs with the quest number. Past
-quest 50 the bands repeat.
+The road runs through nine regions of ten stages each. Every region has its own obstacles, its
+own name and its own music slot, so a stretch of the game has a character rather than a
+difficulty number. Past stage 90 the regions repeat with the clock still tightening.
 
-| Quests | Obstacle | At the start of the band | At the end |
-| --- | --- | --- | --- |
-| 1–10 | Frost only | 2 frost | 5 frost |
-| 11–20 | Bramble only | 1 bramble | 3 bramble |
-| 21–30 | Creeper vine, fast | 1 shoot every 9 s | 3 shoots every 5.4 s |
-| 31–40 | Frost + bramble | 2 frost, 1 bramble | 4 frost, 2 bramble |
-| 41–50 | Frost + creeper, fast | 2 frost, 1 shoot every 9 s | 4 frost, 2 shoots every 5.4 s |
+| Stages | Region | Obstacles |
+| --- | --- | --- |
+| 1–10 | Snowy Days | Frost |
+| 11–20 | Thorny Forest | Bramble |
+| 21–30 | Moving Jungle | Creeper vine (fast) |
+| 31–40 | Tricky Alps | Frost + bramble |
+| 41–50 | Deadly White Plains | Frost + creeper (fast) |
+| 51–60 | Endless Desert | Frost + sand pit |
+| 61–70 | Drunken Oasis | Bramble + sand pit |
+| 71–80 | The Labyrinth | Sand pit + creeper (fast) |
+| 81–90 | Doors of Svartalheim | Frost + creeper + sand pit (fast) |
 
-The mixed bands give each obstacle a smaller share so the two together aren't twice the work.
-The vine bands spread noticeably faster than a mixed band would — that's `band.fast` in
-`obstaclesFor()`.
+Counts climb within a region, and a region with two or three obstacles gives each a smaller
+share so they don't simply add up. The **Map** button shows the whole road, which region you're
+in and how far through it you are.
 
-Note that the vine bands set **no blocker goal at all**, since the vine doesn't count toward
-one. Those quests are judged purely on their collect or score goal, with the vine as pressure.
+The heading above the goals names the region; the line under it gives the stage and your
+position in it — *Stage 34 · 4 of 10*.
 
-Goal sizes are derived from what a board can actually produce, not picked by hand — see
-[Balance](#balance).
+### The sand pit
+
+From the Endless Desert onwards, sand pits open on the board. A pit locks its cell like a
+bramble, but that isn't the threat. **A pit swallows a rune charge you are holding.** Sit on
+your charges with a pit open and the sand takes one, every 9 to 20 seconds depending on how
+deep into the region you are. Spend them or lose them.
+
+Clearing every pit stops it for the rest of the stage. Pits count toward the blocker goal —
+they're static and clearable, unlike the creeper.
 
 ## The stage clock
 
@@ -287,10 +298,15 @@ that band keeps the default. Nothing breaks either way, and only `bgm.mp3` is re
 | File | Bands |
 | --- | --- |
 | `assets/bgm.mp3` | required; the fallback for everything |
-| `assets/bgm-frost.mp3` | 1–10 |
-| `assets/bgm-bramble.mp3` | 11–20 |
-| `assets/bgm-vine.mp3` | 21–30 and 41–50 |
-| `assets/bgm-mixed.mp3` | 31–40 |
+| `assets/bgm-frost.mp3` | Snowy Days |
+| `assets/bgm-bramble.mp3` | Thorny Forest |
+| `assets/bgm-vine.mp3` | Moving Jungle |
+| `assets/bgm-alps.mp3` | Tricky Alps |
+| `assets/bgm-plains.mp3` | Deadly White Plains |
+| `assets/bgm-desert.mp3` | Endless Desert |
+| `assets/bgm-oasis.mp3` | Drunken Oasis |
+| `assets/bgm-labyrinth.mp3` | The Labyrinth |
+| `assets/bgm-svartalheim.mp3` | Doors of Svartalheim |
 
 Tracks change at the start of a quest with a short fade down and back up. A file that 404s is
 noted once and never requested again, so a half-finished set costs nothing.
@@ -368,8 +384,13 @@ exists for the player's benefit and there's nothing to protect.
 ## Unused moves become rune charges
 
 Finishing a quest early converts what's left of your move budget into carried power-ups.
-Every 3 unused moves is one rune charge, minimum one if you had any moves left at all, up to
-a ceiling of 5 held at once. Charges carry forward across quests and accumulate.
+Every 6 unused moves is one rune charge, at most 2 from a single clear, up to a ceiling of 3
+held at once.
+
+Those numbers used to be 3, unlimited and 5, which made the game easier the better you played:
+a fast clear already earns a speed bonus in zeny, and handing over five runes on top of it
+meant the next stage could be coasted. Paying twice for the same skill flattened the
+difficulty curve just as it was supposed to bite. Charges carry forward across quests and accumulate.
 
 Spend one by pressing the rune charge button and then tapping any slime on the board: it
 becomes a bomb rune, no move consumed. It sits there until you match it, so you choose when
@@ -386,7 +407,10 @@ A 1:1 conversion is tempting but breaks the game — 20 spare moves would mean 2
 
 ## The warp
 
-Clearing a quest plays a transition rather than a dialog box. Tiles spiral out from the
+Clearing a quest plays a transition rather than a dialog box, and it **waits for you** at the
+end — the next stage starts when you press Continue, not on a timer. The clock is stopped
+there, so there is no cost to taking a breath, checking the map or visiting the shop between
+stages. Arriving in a new region is announced by name on that card. Tiles spiral out from the
 centre in a ring-shaped stagger, a portal opens, and two cards pass through it: your clear
 summary — time left, speed bonus, charges earned — then the next quest's objective, showing
 what you'll be collecting, the move budget, the clock and any charges you're carrying in.
@@ -450,7 +474,9 @@ written at the top of the file:
 ## Balance
 
 `test/balance.js` plays quests with a bot that reads the board out of the DOM, aims at
-blockers, and never uses rune charges — one move deep, no cascade planning. It's deliberately
+blockers, respects every locked cell kind (`LOCKED` in `test/bot.js` — keep it in step when a
+new obstacle locks its cell, or the bot proposes illegal swaps all quest and the numbers look
+catastrophic), and never uses rune charges — one move deep, no cascade planning. It's deliberately
 worse than a competent person, so a goal the bot reaches is one a player reaches comfortably.
 
 ```bash
@@ -578,8 +604,12 @@ unwinnable.
 **Board size** — `ROWS` and `COLS` in `js/game.js`. The CSS is driven by a `--cell` variable
 that `fit()` recalculates, so an odd board like 7×9 works without touching the stylesheet.
 
-**Obstacle bands** — the `BANDS` table and `obstaclesFor()` in `js/game.js`. Each entry is a
-starting quest and the kinds it uses; `fast` shortens the vine's spread timer.
+**Regions** — the `REGIONS` table and `obstaclesFor()` in `js/game.js`. Each entry is a
+starting stage, a name, the obstacle kinds it uses and its music slot; `fast` shortens the
+creeper's spread timer. Add a region by adding a row — the map, the heading and the music
+lookup all read from it.
+
+**The sand pit** — `sandpit` and `sandEvery` in the plan, `swallowCharge()` for the behaviour.
 
 **Difficulty curve** — `questFor(n)` returns the colours, goal sizes, blocker plan and move
 budget; `timeFor(q, n)` derives the clock from all of it. Change anything here and re-run

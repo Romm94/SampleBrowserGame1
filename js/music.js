@@ -96,10 +96,15 @@ window.RuneMusic = (() => {
   /* Optional per-band tracks. Drop any of these in and they're used; leave them
      out and that band simply keeps the default. Nothing breaks either way. */
   const STAGE_TRACKS = {
-    frost:   "assets/bgm-frost.mp3",
-    bramble: "assets/bgm-bramble.mp3",
-    vine:    "assets/bgm-vine.mp3",
-    mixed:   "assets/bgm-mixed.mp3"
+    frost:       "assets/bgm-frost.mp3",
+    bramble:     "assets/bgm-bramble.mp3",
+    vine:        "assets/bgm-vine.mp3",
+    alps:        "assets/bgm-alps.mp3",
+    plains:      "assets/bgm-plains.mp3",
+    desert:      "assets/bgm-desert.mp3",
+    oasis:       "assets/bgm-oasis.mp3",
+    labyrinth:   "assets/bgm-labyrinth.mp3",
+    svartalheim: "assets/bgm-svartalheim.mp3"
   };
 
   let el = null, gain = null, routed = false;
@@ -112,7 +117,10 @@ window.RuneMusic = (() => {
     el.src = TRACK;
     el.loop = true;
     el.preload = "auto";
-    el.crossOrigin = "anonymous";
+    /* No crossOrigin. The track is same-origin, and setting it to "anonymous"
+       forces the browser to fetch in CORS mode — a plain static server sends no
+       Access-Control-Allow-Origin header, the load fails, and the music never
+       plays. It is only needed for genuinely cross-origin audio. */
     el.setAttribute("playsinline", "");      // iOS: don't hand it to the video player
     el.volume = 1;                           // real level is set on the gain node
 
@@ -128,14 +136,20 @@ window.RuneMusic = (() => {
       failed = true;
     });
 
-    // first touch anywhere is our chance to start
+    /* Every gesture is another chance to start, not just the first. The opening
+       attempt can fail for reasons that clear up a moment later — the track
+       still loading, the context not yet resumed — and a single shot meant the
+       music stayed silent for the whole session when it did. */
     const wake = () => {
-      document.removeEventListener("pointerdown", wake);
-      document.removeEventListener("keydown", wake);
+      if (playing || muted || failed) return;
       start();
+      if (playing){
+        document.removeEventListener("pointerdown", wake);
+        document.removeEventListener("keydown", wake);
+      }
     };
-    document.addEventListener("pointerdown", wake, { once: true });
-    document.addEventListener("keydown", wake, { once: true });
+    document.addEventListener("pointerdown", wake);
+    document.addEventListener("keydown", wake);
   }
 
   /* Route the element through a gain node so volume works on iOS. Must happen
@@ -143,6 +157,10 @@ window.RuneMusic = (() => {
      fine everywhere except iOS. */
   function route(){
     if (routed || !el) return;
+    /* On a file:// page a media element routed through Web Audio is treated as
+       cross-origin and the graph outputs silence. Stay on el.volume there —
+       it costs iOS fading, but iOS doesn't open file:// pages anyway. */
+    if (location.protocol === "file:"){ routed = true; gain = null; return; }
     const c = window.RuneAudio && RuneAudio.unlock();
     if (!c) return;
     try {
@@ -179,7 +197,7 @@ window.RuneMusic = (() => {
     const attempt = el.play();
     if (attempt && attempt.then){
       attempt.then(() => { playing = true; setLevel(VOLUME, FADE_MS); })
-             .catch(() => { playing = false; });   // still blocked, try again next tap
+             .catch(() => { playing = false; });   // still blocked; the next gesture retries
     } else {
       playing = true;
       setLevel(VOLUME, FADE_MS);

@@ -4,8 +4,13 @@
   const ROWS = 8, COLS = 8;
 
   /* ---- tuning ---------------------------------------------------------- */
-  const MOVES_PER_CHARGE = 3;    // unused moves needed for one carried rune charge
-  const MAX_CHARGES      = 5;    // ceiling on charges held at once
+  /* Unused moves become carried runes, but sparingly. At 3 moves per charge
+     with a ceiling of 5, a quick clear handed over enough firepower to coast
+     through the next quest — the speed bonus already pays for finishing fast,
+     and paying twice made the game easier the better you played. */
+  const MOVES_PER_CHARGE = 6;    // unused moves needed for one carried rune charge
+  const CHARGES_PER_QUEST = 2;   // most a single clear can hand over
+  const MAX_CHARGES      = 3;    // ceiling on charges held at once
   const TIME_FLOOR       = 80;   // seconds, shortest a stage can be
   const TIME_CEIL        = 300;  // seconds, longest a stage can be
   const CONTINUE_BASE    = 1200; // zeny for the first continue in a quest
@@ -42,6 +47,9 @@
   const movesEl  = document.getElementById("moves");
   const goalsEl  = document.getElementById("goals");
   const questEl  = document.getElementById("questTitle");
+  const stageEl  = document.getElementById("questStage");
+  const mapEl    = document.getElementById("map");
+  const mapList  = document.getElementById("mapList");
   const comboEl  = document.getElementById("combo");
   const timerEl  = document.getElementById("timer");
   const clockEl  = document.getElementById("clock");
@@ -292,6 +300,8 @@
 
   function blockerMarkup(b){
     const chipped = b.hp < (b.max || b.hp) ? " is-chipped" : "";
+    // the sand pit has no atlas cell; it's drawn in CSS as a turning funnel
+    if (b.kind === "sandpit") return `<i class="sandpit${chipped}"></i>`;
     return `<i class="art art-${BLOCKER_ART[b.kind]}${chipped}"></i>`;
   }
 
@@ -341,8 +351,9 @@
   const creepersLeft = () => blockers.flat().filter(b => b && b.kind === "creeper").length;
   const isLocked = (r,c) => {
     const b = blockers[r] && blockers[r][c];
-    return !!b && (b.kind === "bramble" || b.kind === "creeper");
+    return !!b && (b.kind === "bramble" || b.kind === "creeper" || b.kind === "sandpit");
   };
+  const sandpitsLeft = () => blockers.flat().filter(b => b && b.kind === "sandpit").length;
 
   // a cleared cell chips whatever is under it
   function chipBlocker(r, c){
@@ -354,6 +365,7 @@
     if (!sample("blocker-" + b.kind, b.hp <= 0 ? 1 : .7))
       blip(b.hp <= 0 ? 620 : 380, .1, "square", .13);
     if (b.kind === "creeper") creeperCleared();
+    if (b.kind === "sandpit" && b.hp <= 0 && !sandpitsLeft()) stopSand();
     return b.kind !== "creeper";
   }
 
@@ -428,9 +440,12 @@
     put("frost", plan.frostHp || 1, plan.frost || 0);
     put("bramble", 1, plan.bramble || 0);
     put("creeper", 1, plan.creeper || 0);
+    put("sandpit", 1, plan.sandpit || 0);
 
     creeperEvery = plan.creeperEvery || 0;
+    sandEvery = plan.sandEvery || 0;
     armCreeper();
+    armSand();
 
     // bramble and creeper freeze their cells, so make sure a legal move survives
     let guard = 0;
@@ -795,38 +810,47 @@
      character rather than piling everything on at once. Within a band the
      count climbs with the quest number; past quest 50 the bands repeat with
      the intensity of the last one. */
-  const BANDS = [
-    { from: 1,  kinds:["frost"] },
-    { from: 11, kinds:["bramble"] },
-    { from: 21, kinds:["creeper"], fast: true },
-    { from: 31, kinds:["frost","bramble"] },
-    { from: 41, kinds:["frost","creeper"], fast: true }
+  const REGIONS = [
+    { from:  1, name:"Snowy Days",           kinds:["frost"] },
+    { from: 11, name:"Thorny Forest",        kinds:["bramble"] },
+    { from: 21, name:"Moving Jungle",        kinds:["creeper"], fast:true },
+    { from: 31, name:"Tricky Alps",          kinds:["frost","bramble"] },
+    { from: 41, name:"Deadly White Plains",  kinds:["frost","creeper"], fast:true },
+    { from: 51, name:"Endless Desert",       kinds:["frost","sandpit"] },
+    { from: 61, name:"Drunken Oasis",        kinds:["bramble","sandpit"] },
+    { from: 71, name:"The Labyrinth",        kinds:["sandpit","creeper"], fast:true },
+    { from: 81, name:"Doors of Svartalheim", kinds:["frost","creeper","sandpit"], fast:true }
   ];
-
-  // which music each obstacle band asks for; see STAGE_TRACKS in js/music.js
-  const BAND_MUSIC = ["frost", "bramble", "vine", "mixed", "vine"];
+  const LAST_STAGE = 90;                       // past here the regions repeat
 
   function bandFor(n){
-    const wrapped = n > 50 ? ((n - 1) % 50) + 1 : n;
-    let band = BANDS[0];
-    for (const b of BANDS) if (wrapped >= b.from) band = b;
-    return { band, step: wrapped - band.from };      // 0..9 within the band
+    const wrapped = n > LAST_STAGE ? ((n - 1) % LAST_STAGE) + 1 : n;
+    let band = REGIONS[0];
+    for (const b of REGIONS) if (wrapped >= b.from) band = b;
+    return { band, step: wrapped - band.from, wrapped };   // step is 0..9
   }
+  const regionOf = n => bandFor(n).band;
 
   function obstaclesFor(n){
     const { band, step } = bandFor(n);
     const has = k => band.kinds.includes(k);
+    const many = band.kinds.length;                  // share the load when mixed
     const ramp = (base, per, cap) => Math.min(cap, base + Math.floor(step / per));
-    const shared = band.kinds.length > 1;            // split the load when mixed
 
-    const plan = { frost: 0, frostHp: 1, bramble: 0, creeper: 0, creeperEvery: 0 };
-    if (has("frost"))   plan.frost   = ramp(shared ? 2 : 2, shared ? 4 : 3, shared ? 4 : 5);
-    if (has("bramble")) plan.bramble = ramp(1, shared ? 5 : 4, shared ? 2 : 3);
+    const plan = { frost:0, frostHp:1, bramble:0, creeper:0, creeperEvery:0,
+                   sandpit:0, sandEvery:0 };
+
+    if (has("frost"))   plan.frost   = ramp(2, many > 1 ? 4 : 3, many > 2 ? 3 : many > 1 ? 4 : 5);
+    if (has("bramble")) plan.bramble = ramp(1, many > 1 ? 5 : 4, many > 1 ? 2 : 3);
     if (has("creeper")){
-      plan.creeper = ramp(1, 4, shared ? 2 : 3);
-      // the vine bands spread noticeably faster than the mixed band would
+      plan.creeper = ramp(1, 4, many > 2 ? 2 : many > 1 ? 2 : 3);
       const base = band.fast ? 9000 : 15000;
       plan.creeperEvery = Math.max(band.fast ? 5000 : 8000, base - step * 400);
+    }
+    if (has("sandpit")){
+      plan.sandpit = ramp(1, 4, many > 2 ? 2 : 3);
+      // how long a held rune charge survives before the sand takes it
+      plan.sandEvery = Math.max(9000, 20000 - step * 900);
     }
     return plan;
   }
@@ -844,7 +868,9 @@
        first legal move should come close to clearing them, so a person who
        actually aims at the blockers clears them with room to spare. */
     const plan = obstaclesFor(n);
-    const blockerCount = plan.frost + plan.bramble;   // creeper is not an objective
+    // creeper is the only obstacle left out: it spreads, so counting it would
+    // make the target move while you chase it
+    const blockerCount = plan.frost + plan.bramble + plan.sandpit;
     const isScoreQuest = n >= 5 && n % 5 === 0;
     const moves = Math.max(18, 30 - Math.floor((n - 1) / 2));
 
@@ -1062,20 +1088,78 @@
     warpBody.innerHTML = questHTML;
     warpBody.classList.remove("swap");
     sweep(600, 180, .5);
-    await sleep(1900);
+
+    /* Wait for the player rather than pushing them into the next stage. The
+       clock is stopped here, so there is no cost to taking a breath. */
+    const go = warpBody.querySelector("#warpGo");
+    if (go){
+      await new Promise(resolve => {
+        let done = false;
+        const finish = () => { if (!done){ done = true; resolve(); } };
+        go.onclick = finish;
+        document.addEventListener("keydown", function once(e){
+          if (e.key === "Enter" || e.key === " "){
+            document.removeEventListener("keydown", once);
+            finish();
+          }
+        });
+      });
+    } else {
+      await sleep(1900);
+    }
 
     warpEl.hidden = true;
   }
 
   /* ---------------- stage flow ---------------- */
+  /* ---------------- sand pit ----------------
+     It doesn't spread and it doesn't block much on its own. What it does is
+     eat a rune charge you are sitting on: hold one too long with a pit open
+     and the sand takes it. Spend your charges or lose them. */
+  let sandTimer = null, sandEvery = 0;
+
+  function stopSand(){
+    clearTimeout(sandTimer);
+    sandTimer = null;
+  }
+
+  function armSand(){
+    stopSand();
+    if (!sandEvery || !started || locked || !sandpitsLeft()) return;
+    sandTimer = setTimeout(swallowCharge, sandEvery);
+  }
+
+  function swallowCharge(){
+    sandTimer = null;
+    if (busy || locked || !started || !veil.hidden || !shopEl.hidden){ armSand(); return; }
+    if (!sandpitsLeft()) return;
+
+    if (charges > 0){
+      charges--;
+      renderCharges();
+      announce("The sand takes a rune", 1200, true);
+      const pit = firstSandpit();
+      if (pit){ sparks(pit[0], pit[1], 16, "#e8c07a"); shake(false); }
+      if (!sample("blocker-sandpit", 1)) blip(160, .4, "sawtooth", .13);
+    }
+    armSand();
+  }
+
+  function firstSandpit(){
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if (blockers[r][c] && blockers[r][c].kind === "sandpit") return [r,c];
+    return null;
+  }
+
   function stopCreeper(){
     clearTimeout(creeperTimer);
     creeperTimer = null;
     creeperEvery = 0;
   }
+  function stopHazards(){ stopCreeper(); stopSand(); sandEvery = 0; }
 
   function startLevel(n, entrance){
-    stopCreeper();
+    stopHazards();
     hideTip();
     level = n;
     const q = questFor(n);
@@ -1085,7 +1169,11 @@
     movesLeft = q.moves;
     scoreAtStart = score;          // score goals measure this quest, not the wallet
     continues = 0;
-    questEl.textContent = "Quest " + n;
+    const { band, step, wrapped } = bandFor(n);
+    questEl.textContent = band.name;
+    stageEl.textContent = wrapped === n
+      ? `Stage ${n} · ${step + 1} of 10`
+      : `Stage ${n} · ${band.name} again`;
     movesEl.textContent = movesLeft;
     movesEl.classList.remove("low");
     renderCharges();
@@ -1096,8 +1184,7 @@
     disarm();
     startTimer(q.seconds);
     if (window.RuneMusic){
-      const idx = BANDS.indexOf(bandFor(n).band);
-      RuneMusic.setStage(BAND_MUSIC[idx] || "");
+      RuneMusic.setStage(band.music || "");
     }
     busy = false;
     saveProgress();
@@ -1144,7 +1231,7 @@
     busy = true;
     hideTip();
     pauseTimer();
-    stopCreeper();
+    stopHazards();
     clearHint();
     disarm();
     markSelected(null);
@@ -1155,7 +1242,7 @@
     const timeBonus = Math.round(remain * (4 + level) * tier.mult);
 
     const earned = movesLeft > 0
-      ? Math.max(1, Math.floor(movesLeft / MOVES_PER_CHARGE))
+      ? Math.min(CHARGES_PER_QUEST, Math.max(1, Math.floor(movesLeft / MOVES_PER_CHARGE)))
       : 0;
     const before = charges;
     charges = Math.min(MAX_CHARGES, charges + earned);
@@ -1174,13 +1261,18 @@
       </dl>`;
 
     const next = questFor(level + 1);
+    const nextBand = bandFor(level + 1);
+    const arriving = nextBand.band !== bandFor(level).band;
     const quest = `
-      <p class="kicker">Warping to</p>
-      <h3>Quest ${level + 1}</h3>
+      <p class="kicker">${arriving ? "Now entering" : "Warping to"}</p>
+      <h3>${arriving ? nextBand.band.name : "Stage " + (level + 1)}</h3>
+      ${arriving ? `<p class="warp-meta">Stage ${level + 1} · first of ten</p>` : ""}
       <div class="warp-goals">${next.goals.map(g => goalRow(g, true)).join("")}</div>
       <p class="warp-meta">${next.moves} moves · ${clock(next.seconds)} on the clock${
-        next.plan.frost + next.plan.bramble ? ` · ${next.plan.frost + next.plan.bramble} blockers` : ""}${
-        charges ? ` · ${charges} rune charge${charges === 1 ? "" : "s"} carried` : ""}</p>`;
+        next.plan.frost + next.plan.bramble + next.plan.sandpit
+          ? ` · ${next.plan.frost + next.plan.bramble + next.plan.sandpit} blockers` : ""}${
+        charges ? ` · ${charges} rune charge${charges === 1 ? "" : "s"} carried` : ""}</p>
+      <button class="btn gold warp-go" id="warpGo">Continue</button>`;
 
     await warp(summary, quest);
     startLevel(level + 1, true);
@@ -1256,7 +1348,7 @@
   async function loseLife(reason){
     busy = true;
     pauseTimer();
-    stopCreeper();
+    stopHazards();
     charges = 0;
     renderCharges();
 
@@ -1424,16 +1516,57 @@
     drawShop();
   });
 
+  /* ---------------- the map ----------------
+     Nine regions, what lives in each, and how far along you are. */
+  const HAZARD_LABEL = { frost:"Frost", bramble:"Bramble", creeper:"Creeper vine", sandpit:"Sand pit" };
+
+  function drawMap(){
+    const here = bandFor(level);
+    const lap = Math.floor((level - 1) / LAST_STAGE);
+    mapList.innerHTML = REGIONS.map(reg => {
+      const last = reg.from + 9;
+      const current = reg === here.band;
+      const done = here.wrapped > last;
+      const state = current ? "here" : done ? "done" : "ahead";
+      const pips = Array.from({ length: 10 }, (_, i) => {
+        const stage = reg.from + i;
+        const filled = here.wrapped > stage || (current && here.wrapped === stage);
+        const now = current && here.wrapped === stage;
+        return `<i class="pip${filled ? " on" : ""}${now ? " now" : ""}"></i>`;
+      }).join("");
+      return `<div class="map-region is-${state}">
+        <div class="map-head">
+          <h4>${reg.name}</h4>
+          <span>${reg.from}–${last}</span>
+        </div>
+        <p>${reg.kinds.map(k => HAZARD_LABEL[k]).join(" · ")}</p>
+        <div class="pips">${pips}</div>
+      </div>`;
+    }).join("") + (lap > 0
+      ? `<p class="map-lap">You are on lap ${lap + 1}. The regions repeat, the clock keeps tightening.</p>`
+      : "");
+  }
+
+  function openMap(){
+    hideTip();
+    drawMap();
+    mapEl.hidden = false;
+  }
+  function closeMap(){ mapEl.hidden = true; }
+  document.getElementById("mapBtn").onclick = () => mapEl.hidden ? openMap() : closeMap();
+  document.getElementById("mapClose").onclick = closeMap;
+
   function openShop(){
     hideTip();
     drawShop();
     shopEl.hidden = false;
     pauseTimer();
     clearTimeout(creeperTimer); creeperTimer = null;
+    stopSand();
   }
   function closeShop(){
     shopEl.hidden = true;
-    if (started && !locked && !busy && veil.hidden){ resumeTimer(); armCreeper(); }
+    if (started && !locked && !busy && veil.hidden){ resumeTimer(); armCreeper(); armSand(); }
   }
   document.getElementById("shopBtn").onclick = () => shopEl.hidden ? openShop() : closeShop();
   document.getElementById("shopClose").onclick = closeShop;
@@ -1457,6 +1590,7 @@
     if (e.key !== "Escape") return;
     if (!helpEl.hidden) closeHelp();
     else if (!shopEl.hidden) closeShop();
+    else if (!mapEl.hidden) closeMap();
   });
 
   /* ---------------- rune combinations ----------------

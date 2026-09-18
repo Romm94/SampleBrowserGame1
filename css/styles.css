@@ -679,3 +679,55 @@ body::before{
 @media(prefers-reduced-motion:reduce){
   .blocker[data-kind="creeper"]::before{animation:none}
 }
+
+/* ===================================================================
+   Sand pit — no atlas cell; a turning funnel drawn in CSS
+   =================================================================== */
+.sandpit{
+  display:block; width:94%; height:94%; margin:3%;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, #1b1206 0%, #3a2a10 18%, transparent 19%),
+    conic-gradient(from 0deg, #d9a441, #8a6124, #e8c07a, #7a5520, #d9a441);
+  box-shadow:inset 0 0 14px rgba(0,0,0,.85), 0 0 12px rgba(220,170,90,.55);
+  animation:sandTurn 6s linear infinite;
+}
+.sandpit.is-chipped{opacity:.6}
+@keyframes sandTurn{to{transform:rotate(360deg)}}
+.blocker[data-kind="sandpit"]::before{
+  background:radial-gradient(circle at 50% 50%, rgba(80,54,18,.22), rgba(40,26,8,.46));
+  border-color:rgba(240,200,120,.95);
+  box-shadow:inset 0 0 16px rgba(200,150,60,.5), 0 0 13px rgba(220,170,80,.55);
+}
+.blocker[data-kind="sandpit"]::after{
+  content:""; position:absolute; left:14%; right:14%; top:50%; height:3px;
+  border-radius:3px; background:rgba(255,255,255,.75);
+  transform:rotate(-38deg); opacity:.45; z-index:2;
+}
+@media(prefers-reduced-motion:reduce){ .sandpit{animation:none} }
+
+/* ===================================================================
+   Region heading and the map
+   =================================================================== */
+.stage-line{margin:2px 0 10px !important; font-size:12px; color:#9b91c4;
+            font-variant-numeric:tabular-nums}
+.warp-go{margin-top:14px; width:100%}
+
+.map-list{display:grid; gap:9px}
+.map-region{
+  background:linear-gradient(180deg,#332b60,#241e49);
+  border:1px solid #4a3f80; border-radius:11px; padding:10px 12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1);
+}
+.map-region.is-here{border-color:var(--gold); box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 0 16px rgba(233,196,106,.35)}
+.map-region.is-done{opacity:.55}
+.map-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+.map-head h4{margin:0; font-family:"Cinzel",serif; font-size:14.5px; color:var(--parch)}
+.map-region.is-here .map-head h4{color:var(--gold)}
+.map-head span{font-size:12px; color:#9b91c4; font-variant-numeric:tabular-nums}
+.map-region p{margin:3px 0 7px !important; font-size:12px; color:#9b91c4}
+.pips{display:flex; gap:4px}
+.pip{width:100%; height:5px; border-radius:99px; background:#191338}
+.pip.on{background:linear-gradient(90deg,var(--teal),#a8f0e6)}
+.pip.now{background:var(--gold); box-shadow:0 0 8px rgba(233,196,106,.9)}
+.map-lap{margin:10px 0 0 !important; font-size:12.5px; color:var(--gold)}

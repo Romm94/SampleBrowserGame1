@@ -61,8 +61,12 @@ async function runQuest(origin, level, smart){
   const goalsAtStart = goalText();
   let played = 0, cleared = false;
 
+  const stageLine = () => doc.getElementById("questStage").textContent;
+  const stageAtStart = stageLine();
+
   while (moves() > 0 && played < startMoves + 4){
-    if (doc.getElementById("questTitle").textContent !== "Quest " + level){ cleared = true; break; }
+    // the heading shows the region name now, so watch the stage line instead
+    if (stageLine() !== stageAtStart){ cleared = true; break; }
     if (!doc.getElementById("veil").hidden) break;      // failed or offered a continue
 
     if (!await playMove(window, doc, { smart })) break;
