@@ -122,7 +122,7 @@ body::before{
   width:calc(var(--cell) * 8); height:calc(var(--cell) * 8);
   border-radius:10px; overflow:hidden;
   background:
-    repeating-conic-gradient(#171130 0% 25%, #241c4c 0% 50%) 0 0 / calc(var(--cell)*2) calc(var(--cell)*2);
+    transparent;
   touch-action:none;
 }
 .tile{
@@ -737,3 +737,63 @@ body::before{
 .privacy-toggle{display:flex; align-items:center; gap:10px; margin-top:10px;
                 font-size:13.5px; color:var(--parch); cursor:pointer}
 .privacy-toggle input{width:20px; height:20px; accent-color:var(--teal); flex:none}
+
+/* ===================================================================
+   Board shape
+   The grid is still 8x8; a region's shape is a mask, and only the cells
+   inside it are drawn. That is what makes a hole read as absent rather
+   than as an empty square.
+   =================================================================== */
+.cells{position:absolute; inset:0; z-index:0; pointer-events:none}
+.cell{
+  position:absolute; left:0; top:0;
+  width:var(--cell); height:var(--cell);
+  background:#1d1640;
+  border-radius:7px;
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.05);
+}
+.cell.alt{background:#261e52}
+
+/* region art behind the board, kept far back so the slimes stay readable */
+.frame::before{
+  content:""; position:absolute; inset:0; border-radius:inherit;
+  background-image:url("../assets/regions.jpg");
+  background-size:300% 300%;
+  opacity:.28;
+  filter:saturate(.75);
+  pointer-events:none;
+}
+.frame[data-art="0"]::before{background-position:   0%   0%}
+.frame[data-art="1"]::before{background-position:  50%   0%}
+.frame[data-art="2"]::before{background-position: 100%   0%}
+.frame[data-art="3"]::before{background-position:   0%  50%}
+.frame[data-art="4"]::before{background-position:  50%  50%}
+.frame[data-art="5"]::before{background-position: 100%  50%}
+.frame[data-art="6"]::before{background-position:   0% 100%}
+.frame[data-art="7"]::before{background-position:  50% 100%}
+.frame[data-art="8"]::before{background-position: 100% 100%}
+.frame > *{position:relative}
+
+/* the board's own tree vine is scenery; the region art now carries the mood */
+.board::before{opacity:.1}
+
+/* region thumbnails on the map */
+.map-region{position:relative; overflow:hidden}
+.map-region::before{
+  content:""; position:absolute; inset:0; border-radius:inherit;
+  background-image:url("../assets/regions.jpg");
+  background-size:300% 300%;
+  opacity:.22; filter:saturate(.8);
+}
+.map-region.is-here::before{opacity:.38}
+.map-region > *{position:relative}
+.map-region[data-art="0"]::before{background-position:   0%   0%}
+.map-region[data-art="1"]::before{background-position:  50%   0%}
+.map-region[data-art="2"]::before{background-position: 100%   0%}
+.map-region[data-art="3"]::before{background-position:   0%  50%}
+.map-region[data-art="4"]::before{background-position:  50%  50%}
+.map-region[data-art="5"]::before{background-position: 100%  50%}
+.map-region[data-art="6"]::before{background-position:   0% 100%}
+.map-region[data-art="7"]::before{background-position:  50% 100%}
+.map-region[data-art="8"]::before{background-position: 100% 100%}
+.map-shape{font-size:11.5px; color:var(--teal); letter-spacing:.03em}

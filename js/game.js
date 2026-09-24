@@ -52,6 +52,7 @@
   const goalsEl  = document.getElementById("goals");
   const questEl  = document.getElementById("questTitle");
   const stageEl  = document.getElementById("questStage");
+  const cellsEl  = document.getElementById("cells");
   const mapEl    = document.getElementById("map");
   const mapList  = document.getElementById("mapList");
   const comboEl  = document.getElementById("combo");
@@ -243,6 +244,7 @@
     document.documentElement.style.setProperty("--cell", cell + "px");
     syncPositions(false);
     syncBlockers();
+    drawCells();
   }
   window.addEventListener("resize", fit);
   window.addEventListener("orientationchange", () => setTimeout(fit, 120));
@@ -399,7 +401,7 @@
     creeperTimer = null;
     if (busy || locked || !started || !veil.hidden){ armCreeper(); return; }
     if (!creepersLeft()) return;                      // beaten for this quest
-    if (creepersLeft() >= CREEPER_CAP){ armCreeper(); return; }
+    if (creepersLeft() >= Math.round(CREEPER_CAP * cellCount / (ROWS * COLS))){ armCreeper(); return; }
 
     // grow into a free cell beside existing vine
     const spots = [];
@@ -407,7 +409,7 @@
       if (!blockers[r][c] || blockers[r][c].kind !== "creeper") continue;
       for (const [dr,dc] of [[0,1],[0,-1],[1,0],[-1,0]]){
         const nr = r+dr, nc = c+dc;
-        if (inBounds(nr,nc) && !blockers[nr][nc]) spots.push([nr,nc]);
+        if (playable(nr,nc) && !blockers[nr][nc]) spots.push([nr,nc]);
       }
     }
     if (!spots.length){ armCreeper(); return; }
@@ -432,7 +434,8 @@
   function placeBlockers(plan){
     resetBlockers();
     const cells = [];
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) cells.push([r,c]);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if (mask[r][c]) cells.push([r,c]);          // never on a hole
 
     const put = (kind, hp, n) => {
       for (let i = 0; i < n && cells.length; i++){
@@ -474,9 +477,13 @@
     tiles.clear();
     board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+      if (!mask[r][c]) continue;                    // a hole in the shape
       const bad = new Set();
-      if (c >= 2 && T(board[r][c-1]).type === T(board[r][c-2]).type) bad.add(T(board[r][c-1]).type);
-      if (r >= 2 && T(board[r-1][c]).type === T(board[r-2][c]).type) bad.add(T(board[r-1][c]).type);
+      // only look back through cells that exist; a hole breaks the run anyway
+      if (c >= 2 && board[r][c-1] && board[r][c-2] &&
+          T(board[r][c-1]).type === T(board[r][c-2]).type) bad.add(T(board[r][c-1]).type);
+      if (r >= 2 && board[r-1][c] && board[r-2][c] &&
+          T(board[r-1][c]).type === T(board[r-2][c]).type) bad.add(T(board[r-1][c]).type);
       let ty; do { ty = rnd(TYPES.length); } while (bad.has(ty));
       board[r][c] = makeTile(ty).id;
     }
@@ -486,6 +493,7 @@
     placeBlockers(stagePlan);
     if (entrance){
       for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+        if (!board[r][c]) continue;
         const t = T(board[r][c]);
         t.el.style.animationDelay = ((r + c) * 22) + "ms";
         t.el.classList.add("warp-in");
@@ -682,15 +690,20 @@
   /* ---------------- gravity ---------------- */
   function collapse(){
     for (let c = 0; c < COLS; c++){
-      let write = ROWS - 1;
-      for (let r = ROWS - 1; r >= 0; r--){
+      // the column's cells, top and bottom. Guaranteed unbroken by the mask rule.
+      let top = -1, bottom = -1;
+      for (let r = 0; r < ROWS; r++) if (mask[r][c]){ if (top < 0) top = r; bottom = r; }
+      if (top < 0) continue;                       // column is entirely hole
+
+      let write = bottom;
+      for (let r = bottom; r >= top; r--){
         if (board[r][c]){
           if (write !== r){ board[write][c] = board[r][c]; board[r][c] = null; }
           write--;
         }
       }
-      let above = -1;
-      for (let r = write; r >= 0; r--){
+      let above = top - 1;
+      for (let r = write; r >= top; r--){
         const t = makeTile(rnd(TYPES.length));
         t.r = above--; t.c = c;
         place(t, false);
@@ -778,14 +791,14 @@
     const swap = (a,b) => { const t = board[a[0]][a[1]]; board[a[0]][a[1]] = board[b[0]][b[1]]; board[b[0]][b[1]] = t; };
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
       const id = board[r][c];
-      if (isLocked(r,c)) continue;
+      if (!id || isLocked(r,c)) continue;
       if (id && T(id).special === "rainbow"){
         const nc = c < COLS-1 ? c+1 : c-1;
         if (!isLocked(r,nc)) return [K(r,c), K(r,nc)];
       }
       for (const [dr,dc] of [[0,1],[1,0]]){
         const r2 = r + dr, c2 = c + dc;
-        if (!inBounds(r2,c2) || isLocked(r2,c2)) continue;
+        if (!playable(r2,c2) || isLocked(r2,c2)) continue;
         // two runes side by side always combine, match or no match
         if (id && board[r2][c2] && T(id).special && T(board[r2][c2]).special)
           return [K(r,c), K(r2,c2)];
@@ -799,13 +812,17 @@
   }
 
   async function shuffleBoard(){
-    const list = [];
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) list.push(board[r][c]);
+    // redeal into the cells that already hold tiles; holes must stay holes or
+    // gravity loses the unbroken column runs it depends on
+    const spots = [], list = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+      if (!mask[r][c] || !board[r][c]) continue;
+      spots.push([r,c]); list.push(board[r][c]);
+    }
     let guard = 0;
     do {
       for (let i = list.length - 1; i > 0; i--){ const j = rnd(i+1); [list[i],list[j]] = [list[j],list[i]]; }
-      let i = 0;
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) board[r][c] = list[i++];
+      spots.forEach(([r,c], i) => { board[r][c] = list[i]; });
     } while ((findRuns().length || !findMove()) && ++guard < 200);
     syncPositions(true);
     await sleep(320);
@@ -816,16 +833,79 @@
      character rather than piling everything on at once. Within a band the
      count climbs with the quest number; past quest 50 the bands repeat with
      the intensity of the last one. */
+  /* ---------------- board shapes ----------------
+     A shape is a mask over the 8x8 grid: # is a cell, . is a hole.
+
+     One rule governs every mask: each column's cells must be one unbroken run.
+     Gravity drops tiles down a column and refills from the top, so a hole part
+     way down a column would cut it in two and the lower half could never be
+     refilled — it would empty out and the stage would die. test/features.js
+     checks this for every shape. */
+  const SHAPES = {
+    square: [
+      "########","########","########","########",
+      "########","########","########","########"],
+    pentagon: [
+      "...##...","..####..",".######.","########",
+      "########","########","########","########"],
+    octagon: [
+      "..####..",".######.","########","########",
+      "########","########",".######.","..####.."],
+    trapezoid: [
+      "..####..","..####..",".######.",".######.",
+      "########","########","########","########"],
+    hexagon: [
+      ".######.","########","########","########",
+      "########","########","########",".######."],
+    rhombus: [
+      "...#####","...#####","..#####.","..#####.",
+      ".#####..",".#####..","#####...","#####..."],
+    decagon: [
+      "...##...",".######.","########","########",
+      "########","########",".######.","...##..."],
+    cross: [
+      "..####..","..####..","########","########",
+      "########","########","..####..","..####.."],
+    diamond: [
+      "...##...","..####..",".######.","########",
+      "########",".######.","..####..","...##..."]
+  };
+
+  let mask = SHAPES.square.map(row => row.split("").map(ch => ch === "#"));
+  let cellCount = 64;
+  const playable = (r,c) => inBounds(r,c) && mask[r][c];
+
+  function setShape(name){
+    const rows = SHAPES[name] || SHAPES.square;
+    mask = rows.map(row => row.split("").map(ch => ch === "#"));
+    cellCount = mask.flat().filter(Boolean).length;
+    boardEl.dataset.shape = name;
+    drawCells();
+  }
+
+  /* one socket per playable cell — also what makes the holes visible */
+  function drawCells(){
+    const s = cellPx();
+    cellsEl.innerHTML = "";
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+      if (!mask[r][c]) continue;
+      const d = document.createElement("i");
+      d.className = "cell" + ((r + c) % 2 ? " alt" : "");
+      d.style.transform = `translate3d(${c*s}px, ${r*s}px, 0)`;
+      cellsEl.appendChild(d);
+    }
+  }
+
   const REGIONS = [
-    { from:  1, name:"Snowy Days",           kinds:["frost"] },
-    { from: 11, name:"Thorny Forest",        kinds:["bramble"] },
-    { from: 21, name:"Moving Jungle",        kinds:["creeper"], fast:true },
-    { from: 31, name:"Tricky Alps",          kinds:["frost","bramble"] },
-    { from: 41, name:"Deadly White Plains",  kinds:["frost","creeper"], fast:true },
-    { from: 51, name:"Endless Desert",       kinds:["frost","sandpit"] },
-    { from: 61, name:"Drunken Oasis",        kinds:["bramble","sandpit"] },
-    { from: 71, name:"The Labyrinth",        kinds:["sandpit","creeper"], fast:true },
-    { from: 81, name:"Doors of Svartalheim", kinds:["frost","creeper","sandpit"], fast:true }
+    { from:  1, name:"Snowy Days",          kinds:["frost"],                      music:"frost",       shape:"square",    art:0 },
+    { from: 11, name:"Thorny Forest",       kinds:["bramble"],                    music:"bramble",     shape:"pentagon",  art:1 },
+    { from: 21, name:"Moving Jungle",       kinds:["creeper"], fast:true,         music:"vine",        shape:"octagon",   art:2 },
+    { from: 31, name:"Tricky Alps",         kinds:["frost","bramble"],            music:"alps",        shape:"trapezoid", art:3 },
+    { from: 41, name:"Deadly White Plains", kinds:["frost","creeper"], fast:true, music:"plains",      shape:"hexagon",   art:4 },
+    { from: 51, name:"Endless Desert",      kinds:["frost","sandpit"],            music:"desert",      shape:"rhombus",   art:5 },
+    { from: 61, name:"Drunken Oasis",       kinds:["bramble","sandpit"],          music:"oasis",       shape:"decagon",   art:6 },
+    { from: 71, name:"The Labyrinth",       kinds:["sandpit","creeper"], fast:true, music:"labyrinth", shape:"cross",     art:7 },
+    { from: 81, name:"Doors of Svartalheim",kinds:["frost","creeper","sandpit"], fast:true, music:"svartalheim", shape:"diamond", art:8 }
   ];
   const LAST_STAGE = 90;                       // past here the regions repeat
 
@@ -846,15 +926,16 @@
     const plan = { frost:0, frostHp:1, bramble:0, creeper:0, creeperEvery:0,
                    sandpit:0, sandEvery:0 };
 
-    if (has("frost"))   plan.frost   = ramp(2, many > 1 ? 4 : 3, many > 2 ? 3 : many > 1 ? 4 : 5);
-    if (has("bramble")) plan.bramble = ramp(1, many > 1 ? 5 : 4, many > 1 ? 2 : 3);
+    const fit = k => Math.max(1, Math.round(k * boardShare(n)));
+    if (has("frost"))   plan.frost   = fit(ramp(2, many > 1 ? 4 : 3, many > 2 ? 3 : many > 1 ? 4 : 5));
+    if (has("bramble")) plan.bramble = fit(ramp(1, many > 1 ? 5 : 4, many > 1 ? 2 : 3));
     if (has("creeper")){
-      plan.creeper = ramp(1, 4, many > 2 ? 2 : many > 1 ? 2 : 3);
+      plan.creeper = fit(ramp(1, 4, many > 2 ? 2 : many > 1 ? 2 : 3));
       const base = band.fast ? 9000 : 15000;
       plan.creeperEvery = Math.max(band.fast ? 5000 : 8000, base - step * 400);
     }
     if (has("sandpit")){
-      plan.sandpit = ramp(1, 4, many > 2 ? 2 : 3);
+      plan.sandpit = fit(ramp(1, 4, many > 2 ? 2 : 3));
       // how long a held rune charge survives before the sand takes it
       plan.sandEvery = Math.max(9000, 20000 - step * 900);
     }
@@ -882,7 +963,7 @@
 
     const goals = [];
     if (isScoreQuest){
-      goals.push({ kind:"score", need: scoreTargetFor(moves), have: 0 });
+      goals.push({ kind:"score", need: scoreTargetFor(moves, n), have: 0 });
     } else {
       const count = Math.min(3, 1 + Math.floor((n - 1) / 2));
       /* With six colours, only about one cleared tile in six matches any given
@@ -892,7 +973,8 @@
          colour count, the shrinking clock and the blockers, not from a number
          that outgrows the board. See test/balance.js. */
       const pressure = Math.min(0.95, 0.72 + (n - 1) * 0.015);
-      const need = Math.max(12, Math.round(moves * 0.75 * pressure));
+      // a smaller board yields fewer tiles per move, so the goal follows it down
+      const need = Math.max(8, Math.round(moves * 0.75 * pressure * boardShare(n)));
       pool.slice(0, count).forEach(t => goals.push({ kind:"collect", type:t, need, have:0 }));
     }
     if (blockerCount) goals.push({ kind:"blockers", need: blockerCount, have: 0 });
@@ -905,8 +987,20 @@
   /* Derived from the move budget rather than the quest number: test/balance.js
      shows a bot that aims at objectives but plans no cascades averages roughly
      300 zeny a move, so 220 leaves headroom for an unlucky board. */
-  function scoreTargetFor(moves){
-    return Math.round(moves * 45 / 10) * 10;
+  function scoreTargetFor(moves, n){
+    return Math.round(moves * 45 * boardShare(n) / 10) * 10;
+  }
+
+  /* How much a region's shape should soften its goals.
+     Not the plain cell ratio: measured play shows a narrower board cascades
+     more than its cell count suggests, because short columns refill into each
+     other. Scaling goals straight down by cells made the small shapes clear in
+     a third of their move budget. The square root sits between "no adjustment"
+     and "proportional" and matches what the bot actually manages. */
+  function boardShare(n){
+    const rows = SHAPES[regionOf(n).shape] || SHAPES.square;
+    const cells = rows.join("").split("").filter(ch => ch === "#").length;
+    return Math.sqrt(cells / (ROWS * COLS));
   }
 
   // more to do means more time, but every quest tightens the belt a little
@@ -1178,6 +1272,8 @@
     scoreAtStart = score;          // score goals measure this quest, not the wallet
     continues = 0;
     const { band, step, wrapped } = bandFor(n);
+    setShape(band.shape || "square");
+    frameEl.dataset.art = band.art === undefined ? "" : band.art;
     questEl.textContent = band.name;
     stageEl.textContent = wrapped === n
       ? `Stage ${n} · ${step + 1} of 10`
@@ -1548,6 +1644,9 @@
 
   /* ---------------- the map ----------------
      Nine regions, what lives in each, and how far along you are. */
+  const SHAPE_LABEL = { square:"Square", pentagon:"Pentagon", octagon:"Octagon",
+    trapezoid:"Trapezoid", hexagon:"Hexagon", rhombus:"Rhombus", decagon:"Decagon",
+    cross:"Cross", diamond:"Diamond" };
   const HAZARD_LABEL = { frost:"Frost", bramble:"Bramble", creeper:"Creeper vine", sandpit:"Sand pit" };
 
   function drawMap(){
@@ -1564,12 +1663,13 @@
         const now = current && here.wrapped === stage;
         return `<i class="pip${filled ? " on" : ""}${now ? " now" : ""}"></i>`;
       }).join("");
-      return `<div class="map-region is-${state}">
+      return `<div class="map-region is-${state}" data-art="${reg.art}">
         <div class="map-head">
           <h4>${reg.name}</h4>
           <span>${reg.from}–${last}</span>
         </div>
         <p>${reg.kinds.map(k => HAZARD_LABEL[k]).join(" · ")}</p>
+        <p class="map-shape">${SHAPE_LABEL[reg.shape] || reg.shape} board</p>
         <div class="pips">${pips}</div>
       </div>`;
     }).join("") + (lap > 0

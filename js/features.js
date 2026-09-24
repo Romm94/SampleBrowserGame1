@@ -511,10 +511,14 @@ async function boot(origin, { progress, timeScale } = {}){
           doc.getElementById("clock").textContent !== clockShop,
           clockShop + " -> " + doc.getElementById("clock").textContent);
 
-    // Only bgm.mp3 ships, so every region falls back to it. That fallback is the
-    // contract worth testing: a half-finished music set must cost nothing.
-    check("a region with no track of its own falls back",
-          window.RuneMusic.nowPlaying() === "assets/bgm.mp3",
+    /* Quest 4 is Snowy Days, so it must ask for that region's track. This check
+       existed before in the opposite form and passed for the wrong reason: the
+       regions had lost their `music` keys, so every region fell back to the
+       default and per-region music would never have worked once the files were
+       added. Whether a missing file falls back can't be tested here — jsdom
+       never fetches media, so no error event ever fires. */
+    check("a region asks for its own track",
+          window.RuneMusic.nowPlaying() === "assets/bgm-frost.mp3",
           window.RuneMusic.nowPlaying());
 
     const music = fs.readFileSync(path.join(ROOT, "js", "music.js"), "utf8");
@@ -617,6 +621,80 @@ async function boot(origin, { progress, timeScale } = {}){
     check("and the warp waits on it", /querySelector\("#warpGo"\)/.test(game));
     check("charges per clear are capped", /CHARGES_PER_QUEST\s*=\s*2/.test(game));
     check("and the ceiling is lower", /MAX_CHARGES\s*=\s*3/.test(game));
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\n19. board shapes");
+  {
+    const game = fs.readFileSync(path.join(ROOT, "js", "game.js"), "utf8");
+    const block = game.slice(game.indexOf("const SHAPES = {"), game.indexOf("let mask ="));
+    const shapes = {};
+    for (const m of block.matchAll(/(\w+):\s*\[([^\]]+)\]/g)){
+      shapes[m[1]] = [...m[2].matchAll(/"([.#]{8})"/g)].map(x => x[1]);
+    }
+    check("nine shapes are defined", Object.keys(shapes).length === 9,
+          Object.keys(shapes).join(", "));
+
+    for (const [name, rows] of Object.entries(shapes)){
+      check(`  ${name}: eight rows of eight`,
+            rows.length === 8 && rows.every(r => r.length === 8),
+            rows.length + " rows");
+
+      /* The rule gravity depends on: a column's cells must be one unbroken run.
+         A hole part way down a column would split it, and the part below could
+         never be refilled — the stage would slowly empty and deadlock. */
+      let contiguous = true;
+      for (let c = 0; c < 8; c++){
+        let started = false, ended = false;
+        for (let r = 0; r < 8; r++){
+          const on = rows[r][c] === "#";
+          if (on && ended) contiguous = false;
+          if (on) started = true; else if (started) ended = true;
+        }
+      }
+      check(`  ${name}: every column is unbroken`, contiguous);
+
+      const cells = rows.join("").split("").filter(ch => ch === "#").length;
+      check(`  ${name}: enough board to play on`, cells >= 36, cells + " cells");
+    }
+  }
+
+  console.log("\n20. a shaped board actually plays");
+  {
+    // the diamond is the smallest shape at 40 cells — if any shape deadlocks
+    // or leaks tiles into a hole, it will be this one
+    const { dom, window, doc } = await boot(origin,
+      { progress: { level: 84, zeny: 0, charges: 0,
+                    seen: ["basics","frost","creeper","sandpit","charge"] } });
+    doc.getElementById("veilBtn").click();
+    await sleep(500);
+
+    check("the region is Svartalheim",
+          doc.getElementById("questTitle").textContent === "Doors of Svartalheim",
+          doc.getElementById("questTitle").textContent);
+    const cells = doc.querySelectorAll("#cells .cell").length;
+    check("the diamond draws 40 sockets", cells === 40, cells + " sockets");
+    const tiles = doc.querySelectorAll(".tile").length;
+    check("one tile per socket, none in the holes", tiles === cells,
+          tiles + " tiles for " + cells + " cells");
+
+    for (let i = 0; i < 6; i++) if (!await playMove(window, doc, { smart: true })) break;
+    check("the board refills to the same count after play",
+          doc.querySelectorAll(".tile").length === cells,
+          doc.querySelectorAll(".tile").length + " tiles");
+    // the hint only answers on an idle board, so poll rather than ask once
+    let hinted = 0;
+    for (let i = 0; i < 20 && hinted !== 2; i++){
+      doc.getElementById("hintBtn").click();
+      await sleep(120);
+      hinted = doc.querySelectorAll(".tile.hint").length;
+    }
+    check("a legal move still exists after play", hinted === 2, hinted + " hinted");
+
+    doc.getElementById("mapBtn").click();
+    await sleep(80);
+    check("the map names each board shape", /Diamond board/.test(doc.getElementById("mapList").textContent));
+    dom.window.close();
   }
 
   console.log("\n" + (failures ? failures + " FAILED" : "all passed"));

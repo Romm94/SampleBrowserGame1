@@ -145,17 +145,20 @@ The road runs through nine regions of ten stages each. Every region has its own 
 own name and its own music slot, so a stretch of the game has a character rather than a
 difficulty number. Past stage 90 the regions repeat with the clock still tightening.
 
-| Stages | Region | Obstacles |
-| --- | --- | --- |
-| 1–10 | Snowy Days | Frost |
-| 11–20 | Thorny Forest | Bramble |
-| 21–30 | Moving Jungle | Creeper vine (fast) |
-| 31–40 | Tricky Alps | Frost + bramble |
-| 41–50 | Deadly White Plains | Frost + creeper (fast) |
-| 51–60 | Endless Desert | Frost + sand pit |
-| 61–70 | Drunken Oasis | Bramble + sand pit |
-| 71–80 | The Labyrinth | Sand pit + creeper (fast) |
-| 81–90 | Doors of Svartalheim | Frost + creeper + sand pit (fast) |
+| Stages | Region | Obstacles | Board | Cells |
+| --- | --- | --- | --- | --- |
+| 1–10 | Snowy Days | Frost | Square | 64 |
+| 11–20 | Thorny Forest | Bramble | Pentagon | 52 |
+| 21–30 | Moving Jungle | Creeper vine (fast) | Octagon | 52 |
+| 31–40 | Tricky Alps | Frost + bramble | Trapezoid | 52 |
+| 41–50 | Deadly White Plains | Frost + creeper (fast) | Hexagon | 60 |
+| 51–60 | Endless Desert | Frost + sand pit | Rhombus | 40 |
+| 61–70 | Drunken Oasis | Bramble + sand pit | Decagon | 48 |
+| 71–80 | The Labyrinth | Sand pit + creeper (fast) | Cross | 48 |
+| 81–90 | Doors of Svartalheim | Frost + creeper + sand pit (fast) | Diamond | 40 |
+
+Each region also has its own artwork, shown faintly behind the board and as a thumbnail on the
+map.
 
 Counts climb within a region, and a region with two or three obstacles gives each a smaller
 share so they don't simply add up. The **Map** button shows the whole road, which region you're
@@ -163,6 +166,31 @@ in and how far through it you are.
 
 The heading above the goals names the region; the line under it gives the stage and your
 position in it — *Stage 34 · 4 of 10*.
+
+### Board shapes
+
+The grid stays 8×8; a region's shape is a mask over it, and only the cells inside the shape are
+drawn. A hole is genuinely absent — no socket, no tile, no match can run through it.
+
+**One rule governs every mask: each column's cells must be one unbroken run.** Gravity drops
+tiles down a column and refills from the top, so a hole part way down would cut a column in
+two and the part below could never be refilled — it would slowly empty and the stage would
+deadlock. `test/features.js` checks this for all nine shapes, and any new shape must pass it.
+
+Everything that touches the board honours the mask: building, gravity, refills, legal moves,
+blocker placement, where the vine can spread, and the reshuffle, which redeals into the cells
+that already hold tiles rather than across the whole grid.
+
+Goals soften on a smaller board, but **not in proportion to its cell count**. Scaling straight
+down by cells made the 40-cell shapes clear in a third of their move budget: a narrow board
+cascades more than its size suggests, because short columns refill into each other. The
+adjustment is the square root of the cell ratio, which measured out in line with the full-size
+boards — 11 and 12 moves of an 18-move budget, against 11 to 16 on the big shapes. Obstacle
+counts scale the same way, as does the creeper's cap.
+
+*Rhombus and diamond are the same figure geometrically, so they're drawn differently here: the
+rhombus leans as a parallelogram, the diamond sits point-up. The decagon is an approximation —
+ten true edges don't fit an 8×8 grid.*
 
 ### The sand pit
 
@@ -633,7 +661,8 @@ rune-fall/
 │   ├── telemetry.js        server validation, privacy, client recording, report
 │   └── bot.js              shared board reader and move chooser
 ├── assets/
-│   ├── sprites.png         tile art atlas, 5x2 cells of 128px
+│   ├── sprites.png         tile art atlas, 5x3 cells of 128px
+│   ├── regions.jpg         nine region illustrations, 3x3 atlas
 │   ├── bgm.mp3             looping background track
 │   └── favicon.svg         browser tab icon
 ├── package.json
@@ -681,8 +710,13 @@ unwinnable.
 **Board size** — `ROWS` and `COLS` in `js/game.js`. The CSS is driven by a `--cell` variable
 that `fit()` recalculates, so an odd board like 7×9 works without touching the stylesheet.
 
+**Board shapes** — the `SHAPES` table in `js/game.js`. Add one as eight strings of eight
+characters, `#` for a cell and `.` for a hole, then name it on a region. Run `npm test` — the
+column-contiguity check will tell you straight away if gravity can't handle it.
+
 **Regions** — the `REGIONS` table and `obstaclesFor()` in `js/game.js`. Each entry is a
-starting stage, a name, the obstacle kinds it uses and its music slot; `fast` shortens the
+starting stage, a name, the obstacle kinds it uses, its music slot, its board shape and which
+cell of `regions.jpg` illustrates it; `fast` shortens the
 creeper's spread timer. Add a region by adding a row — the map, the heading and the music
 lookup all read from it.
 
