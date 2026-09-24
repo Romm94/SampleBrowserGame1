@@ -471,6 +471,79 @@ written at the top of the file:
    lives matter, an account login is the real answer; IP is the approximation.
 4. **The `/lives/restore` route refills on demand.** Delete it before deploying.
 
+## Telemetry
+
+The balance work so far has leaned on a test bot that plays one move deep and never spends a
+rune charge — so its numbers are a floor, and some questions (above all, whether the blocker
+goal is too hard) it could never settle. Telemetry replaces that guessing with what real
+players did.
+
+**One record per stage**, written when the stage ends. It holds: stage and region, how it
+ended (cleared, out of time, out of moves, gave up), moves and seconds budgeted and left, each
+goal's progress, blockers placed and cleared, rune charges earned, placed, bought and lost to
+sand, continues and shop spending, the biggest chain and praise reached, lives left, frame rate,
+and screen size.
+
+It is **off unless you turn it on**:
+
+```bash
+npm run telemetry-server        # listens on :8788, writes data/telemetry.ndjson
+```
+
+then uncomment `window.RUNE_TELEMETRY_ENDPOINT` in `index.html`. Without it, records are still
+kept in the browser (the last 50) so you can read your own sessions while developing:
+
+```js
+RuneTelemetry.dump()            // in the browser console
+```
+
+### Reading it
+
+```bash
+npm run report                  # everything collected
+npm run report -- --since 7     # the last week
+```
+
+The report is built around the questions this project couldn't answer:
+
+1. **Is the blocker goal too hard?** It counts losses where *every other goal was done and only
+   the blocker goal was short* — the clean signal. With at least ten losses it gives a verdict.
+2. **By region** — clear rate, moves and seconds left on a clear, continues bought.
+3. **How stages end**, and the five hardest stages.
+4. **How far players reach** — where people stop.
+5. **Economy** — zeny per cleared stage, continues, what gets bought, runes lost to sand.
+6. **Praise** — how often each tier is reached, and the biggest chain seen.
+7. **Performance** — average frame rate on touch and desktop, the share of stages below
+   30 fps, and hitches per stage. This is the cheap-phone check, answered by real phones.
+
+### Privacy
+
+Collection is designed to hold as little as possible, which is also the simplest way to stay on
+the right side of the Philippine Data Privacy Act:
+
+- **No IP address is stored.** The lives server keys on IP because it has to; the telemetry
+  server has no reason to and never writes one.
+- **No name, account, or device fingerprint.** The player is a random id generated in their
+  own browser. Clearing storage makes a new one.
+- **The server keeps only known fields.** Every record is rebuilt from a whitelist, so a
+  modified client can't use the endpoint to store anything else. Oversized or malformed
+  batches are refused, and each id is rate-limited.
+- **Players can switch it off.** When collection is on, the help overlay says what's sent and
+  offers a toggle. Opting out also clears anything waiting to be sent.
+- **Collected data stays out of the repo** — `data/` is in `.gitignore`.
+
+Before going public, you still need to publish a short privacy notice saying what's collected
+and why, and pick a retention period. `npm run report -- --prune 90` deletes anything older than
+90 days; run it on a schedule. This isn't legal advice — if the game grows, have someone
+qualified look it over.
+
+### Sending
+
+Records go out with `navigator.sendBeacon`, so a stage that ends as the tab closes still gets
+through, falling back to `fetch` with `keepalive`. A failed send waits in a local queue (up to
+50) and goes with the next one. Every call into the module is wrapped, so a problem in
+telemetry can never reach the game.
+
 ## Balance
 
 `test/balance.js` plays quests with a bot that reads the board out of the DOM, aims at
@@ -544,16 +617,20 @@ rune-fall/
 ├── js/
 │   ├── game.js             board, matching, quests, timer, warp, charges, blockers
 │   ├── lives.js            5 lives, 30-minute regen, local or server-backed
+│   ├── telemetry.js        one anonymous record per stage, opt-out, local log
 │   ├── progress.js         quest number, zeny, charges and seen tips
 │   ├── music.js            optional background track, ducking and autoplay
 │   └── leaves.js           falling-leaf background, independent of the game
 ├── server/
-│   └── lives-server.example.js    optional IP-keyed lives, plain Node
+│   ├── lives-server.example.js      optional IP-keyed lives, plain Node
+│   ├── telemetry-server.example.js  collects stage records, stores no IP
+│   └── telemetry-report.js          turns them into tuning answers
 ├── test/
 │   ├── smoke.js            headless boot-and-play check
 │   ├── features.js         progress, blockers, score quests, continues
 │   ├── balance.js          bot playthroughs for tuning goal sizes
 │   ├── viewport.js         board sizing across device dimensions
+│   ├── telemetry.js        server validation, privacy, client recording, report
 │   └── bot.js              shared board reader and move chooser
 ├── assets/
 │   ├── sprites.png         tile art atlas, 5x2 cells of 128px

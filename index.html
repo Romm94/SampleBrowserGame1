@@ -141,6 +141,17 @@
           five lives. A life returns every 30 minutes. Unused moves become rune charges you
           carry to the next quest — pick which rune to place, then tap a slime.</p>
 
+          <div class="privacy" id="privacy" hidden>
+            <h3>Play data</h3>
+            <p>This game sends anonymous notes on how each stage went — how far you got,
+            how long it took, which goals were hard — so the difficulty can be tuned. No
+            name, no account, no IP address. You can switch it off.</p>
+            <label class="privacy-toggle">
+              <input type="checkbox" id="shareData" checked>
+              <span>Share anonymous play data</span>
+            </label>
+          </div>
+
           <button class="btn gold" id="helpClose">Got it</button>
         </div>
       </div>
@@ -164,6 +175,11 @@
      instead of this browser's storage. See server/lives-server.example.js
 <script>window.RUNE_LIVES_ENDPOINT = "http://localhost:8787";</script>
 -->
+<!-- Uncomment and point at your own server to collect anonymous play data.
+     See server/telemetry-server.example.js and the README's Telemetry section.
+<script>window.RUNE_TELEMETRY_ENDPOINT = "http://localhost:8788";</script>
+-->
+<script src="js/telemetry.js"></script>
 <script src="js/lives.js"></script>
 <script src="js/progress.js"></script>
 <script src="js/music.js"></script>

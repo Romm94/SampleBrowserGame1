@@ -39,6 +39,10 @@
   ];
 
   const Lives = window.RuneLives;
+  // telemetry is optional; every call goes through this so its absence is harmless
+  const tel = (method, ...args) => {
+    try { const t = window.RuneTelemetry; if (t && t[method]) t[method](...args); } catch (e){}
+  };
   const Progress = window.RuneProgress;
 
   const boardEl  = document.getElementById("board");
@@ -366,6 +370,7 @@
       blip(b.hp <= 0 ? 620 : 380, .1, "square", .13);
     if (b.kind === "creeper") creeperCleared();
     if (b.kind === "sandpit" && b.hp <= 0 && !sandpitsLeft()) stopSand();
+    if (b.kind !== "creeper" && b.hp <= 0) tel("count", "cleared");
     return b.kind !== "creeper";
   }
 
@@ -411,6 +416,7 @@
     blockers[r][c] = { kind:"creeper", hp:1, max:1 };
     drawBlocker(r,c);
     sparks(r, c, 8, "#7fc96f");
+    tel("peak", "creeper", creepersLeft());
     blip(220, .22, "sawtooth", .1);
 
     // never let it strangle the board completely
@@ -1019,6 +1025,7 @@
     if (!t || t.special === "rainbow") return;
     if (isLocked(t.r, t.c)){ blip(150, .1, "sawtooth", .07); return; }
     charges--;
+    tel("count", "placed");
     t.special = chargeRune;
     repaint(t);
     sparks(t.r, t.c, 10, "#ffe9a8");
@@ -1138,6 +1145,7 @@
       charges--;
       renderCharges();
       announce("The sand takes a rune", 1200, true);
+      tel("count", "swallowed");
       const pit = firstSandpit();
       if (pit){ sparks(pit[0], pit[1], 16, "#e8c07a"); shake(false); }
       if (!sample("blocker-sandpit", 1)) blip(160, .4, "sawtooth", .13);
@@ -1186,6 +1194,11 @@
     if (window.RuneMusic){
       RuneMusic.setStage(band.music || "");
     }
+    tel("begin", {
+      stage: n, region: band.name, lap: Math.floor((n - 1) / LAST_STAGE) + 1,
+      kind: q.kind, moves: q.moves, seconds: q.seconds,
+      blockers: blockerTotal, charges, zeny: score
+    });
     busy = false;
     saveProgress();
     scheduleHint();
@@ -1196,9 +1209,19 @@
       if (q.plan.frost)   tip("frost");
       if (q.plan.bramble) tip("bramble");
       if (q.plan.creeper) tip("creeper");
+      if (q.plan.sandpit) tip("sandpit");
       if (q.kind === "score") tip("score");
       if (charges > 0)    tip("charge");
     }, 700);
+  }
+
+  /* what the telemetry record needs at the moment a stage ends */
+  function stageSnapshot(){
+    return {
+      movesLeft, secondsLeft: timeLeft, zeny: score,
+      goals: goals.map(g => ({ kind: g.kind, need: g.need, have: g.have })),
+      lives: (() => { try { return Lives.get().lives; } catch (e){ return null; } })()
+    };
   }
 
   function saveProgress(){
@@ -1249,6 +1272,8 @@
     const kept = charges - before;
 
     addScore(timeBonus);
+    tel("count", "earned", kept);
+    tel("end", "cleared", stageSnapshot());
     blip(660, .12, "sine", .2); setTimeout(() => blip(880, .2, "sine", .2), 130);
 
     const summary = `
@@ -1326,6 +1351,7 @@
     if (score < cost) return;
     addScore(-cost);
     continues++;                    // each continue in the same quest costs double
+    tel("count", "continues");
     veil.hidden = true;
     veilAlt.hidden = true;
     if (reason === "time"){
@@ -1349,6 +1375,7 @@
     busy = true;
     pauseTimer();
     stopHazards();
+    tel("end", reason, stageSnapshot());    // "time", "moves" or "quit"
     charges = 0;
     renderCharges();
 
@@ -1412,6 +1439,7 @@
     combine: ["Two runes, one blast", "Swap two runes into each other and they combine into something much bigger."],
     frost:   ["Frost", "The pale tiles are frost. Clear a match on top of one to chip it away."],
     bramble: ["Bramble", "A bramble tile can't be swapped. Work a match into it from around the side."],
+    sandpit: ["Sand pit", "It locks its tile, and it eats rune charges you hold on to. Spend them before the sand takes one — or clear every pit to stop it."],
     creeper: ["The vine is growing", "It spreads to a new tile every few seconds and locks whatever it covers. Cut it back by matching on it — clear it all and it stops for good."],
     score:   ["A different quest", "This one wants zeny, not colours. Big cascades and rune combinations pay best."],
     charge:  ["Carried runes", "Spare moves became rune charges. Pick a rune below, then tap any slime to place it."]
@@ -1508,6 +1536,8 @@
     if (!item || score < item.cost || !item.can()) return;
     addScore(-item.cost);
     item.buy();
+    tel("bought", item.id);
+    if (item.id === "row" || item.id === "col" || item.id === "bomb") tel("count", "bought");
     saveProgress();
     refreshGoals();
     blip(880, .18, "sine", .2);
@@ -1586,6 +1616,17 @@
   }
   document.getElementById("helpBtn").onclick = () => helpEl.hidden ? openHelp() : closeHelp();
   document.getElementById("helpClose").onclick = closeHelp;
+
+  // the opt-out is only shown when there's somewhere for the data to go
+  (() => {
+    const t = window.RuneTelemetry;
+    const box = document.getElementById("privacy");
+    const share = document.getElementById("shareData");
+    if (!t || !box || !share || !t.isEnabled()) return;
+    box.hidden = false;
+    share.checked = !t.isOptedOut();
+    share.onchange = () => t.optOut(!share.checked);
+  })();
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
     if (!helpEl.hidden) closeHelp();
@@ -1748,6 +1789,7 @@
 
   function noteChain(tiles, combo){
     chainTiles += tiles;
+    tel("peak", "chain", chainTiles);
     const measure = PRAISE_ON === "tiles" ? chainTiles : combo;
     const word = praiseFor(measure);
     if (word && word !== chainWord){
@@ -1758,6 +1800,7 @@
       const lead = chainCombo ? `${chainCombo} · ` : "";
       announce(`${lead}${word} ×${chainTiles}`, 1600, true);
       praiseFx(word);
+      tel("praise", word);
     } else if (!word && combo > 1){
       delete comboEl.dataset.praise;
       announce("Combo ×" + combo, 700);

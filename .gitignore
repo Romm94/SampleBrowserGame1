@@ -1,0 +1,48 @@
+# OS cruft
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# Node — only if you later add tooling (a bundler, a linter, a dev server)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Build output, if a build step ever gets added
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# Collected play data — it's about real players, keep it out of the repo
+data/
+
+# Local config and secrets
+.env
+.env.local
+.env.*.local
+
+# Deploy tooling
+.netlify/
+.vercel/
+.firebase/
+
+# Python's http.server leaves these behind if you script anything
+__pycache__/
+*.pyc

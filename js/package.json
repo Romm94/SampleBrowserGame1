@@ -4,13 +4,16 @@
   "description": "A match-3 puzzle game set in a Norse fantasy field of slimes.",
   "private": true,
   "scripts": {
-    "test": "node test/smoke.js && node test/features.js && node test/viewport.js",
+    "test": "node test/smoke.js && node test/features.js && node test/viewport.js && node test/telemetry.js",
     "smoke": "node test/smoke.js",
     "features": "node test/features.js",
     "balance": "node test/balance.js",
     "serve": "python3 -m http.server 8000",
     "lives-server": "node server/lives-server.example.js",
-    "viewport": "node test/viewport.js"
+    "viewport": "node test/viewport.js",
+    "telemetry": "node test/telemetry.js",
+    "telemetry-server": "node server/telemetry-server.example.js",
+    "report": "node server/telemetry-report.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"
